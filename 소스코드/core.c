@@ -3,7 +3,12 @@
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
+#include <ctype.h>
 #include "core.h"
+
+char exterm[BUFSIZ];
+char *extermp;
+int result = 0;
 
 /**
   ssu_crontab_file 을 읽는 함수
@@ -131,4 +136,201 @@ int log_crontab(const char *str) {
 	fprintf(fp, "[%s] %s\n", strtok(asctime(tm), "\n"), str);
 	fclose(fp);
 	return 0;
+}
+
+static token __get_token() {
+	token t;
+	char *tmp;
+
+	t.type = OP;
+	t.value = 0;
+	if (*extermp == '\0') {
+		return t;
+	}
+
+	while (*extermp == ' ')
+		extermp++;
+
+	if (isdigit(*extermp)) {
+		tmp = extermp;
+		while (isdigit(*tmp))
+			t.value = t.value * 10 + *tmp++ - '0';
+		t.type = NUM;
+		return t;
+	}
+
+	t.type = OP;
+	t.value = *extermp;
+	return t;
+}
+
+static void __next_token() {
+	while (*extermp == ' ')
+		extermp++;
+
+	if (isdigit(*extermp)) {
+		while (isdigit(*extermp))
+			extermp++;
+		return;
+	}
+	extermp++;
+}
+
+static token __comma(int n) {
+	printf("comma()\n");
+	token t, t2;
+	if (result)
+		return t;
+
+	t = __get_token();
+	printf("%d %d %c\n", t.type, t.value, t.value);
+	if (t.type == OP && t.value == 0) {
+		printf("its null\n");
+		result = -1;
+		t.type = OP;
+		t.value = 0;
+		return t;
+	}
+
+	__next_token();
+	t2 = __get_token();
+	if (t2.type == OP && t2.value == ',') {
+		__next_token();
+		__expr(n);
+		return __get_token();
+	}
+	return t;
+}
+
+static token __minus(int n, int table[60]) {
+	printf("minus()\n");
+	token t, t2, t3;
+
+	t = __comma(n);
+	if (result)
+		return t;
+
+	if (t.type == OP && t.value == ',') {
+		result = -1;
+		t.type = OP;
+		t.value = 0;
+		return t;
+	}
+
+	t2 = __get_token();
+	if (t2.type == OP && t2.value == '-') {
+		// - 앞에는 무조건 숫자가 와야함
+		if (t.type == OP) {
+			result = -1;
+			t.type = OP;
+			t.value = 0;
+			return t;
+		}
+
+		__next_token();
+		t3 = __comma(n);
+
+		// - 다음에는 숫자가 와야함
+		// 연산자가 오면 잘못된 수식
+		if (t3.type == OP) {
+			result = -1;
+			t.type = OP;
+			t.value = 0;
+			return t;
+		}
+
+		if (t.value > t3.value) {
+			printf("- 연산자는 오른쪽의 수가 더 커야합니다.\n");
+			t.type = OP;
+			t.value = 0;
+			result = -1;
+			return t;
+		}
+
+		for (int i = t.value; i <= t3.value; i++)
+			table[i] = 1;
+		return t3;
+	}
+	
+	return t;
+}
+
+static token __slash(int n, int table[60]) {
+	printf("slash()\n");
+	token t, t2, t3;
+
+	t = __minus(n, table);
+	if (result) {
+		t.type = OP;
+		t.value = 0;
+		return t;
+	}
+
+	if (t.type == OP && t.value == '-') {
+		t.type = OP;
+		t.value = 0;
+		result = -1;
+		return t;
+	}
+
+	t2 = __get_token();
+	if (t2.type == OP && t2.value == '/') {
+		// /(슬래쉬) 앞에 *이나 숫자가 아닌 연산자가 오면 에러
+		if (!(t.type == OP && t.value == '*') && !(t.type == NUM)) {
+			result = -1;
+			t.type = OP;
+			t.value = 0;
+			return t;
+		}
+
+		__next_token();
+		t3 = __minus(n, table);
+
+		// 슬래쉬 다음에 숫자가 와야함
+		// 연산자가 오면 잘못된 수식
+		if (t3.type == OP) {
+			result = -1;
+			t.type = OP;
+			t.value = 0;
+			return t;
+		}
+
+		for (int i = 0; i < 60; i++) {
+			if (i % t3.value == 0 && table[i]) {
+				table[i] = 0;
+			}
+		}
+		return t3;
+	}
+	return t;
+}
+
+static int __expr(int n) {
+	printf("expr()\n");
+	token t;
+	int table[60];
+
+	memset(table, 0, sizeof(table));
+	t = __slash(n, table);
+
+	if (result)
+		return result;
+
+	if (t.type == OP && t.value == '/') {
+		return -1;
+	}
+
+	if (strlen(extermp) > 0)
+		return -1;
+	return table[n];
+}
+
+// 1-15/2,16-30/3
+int parse_execute_term(const char *str, int n) {
+	printf("parse()\n");
+	memset(exterm, 0, sizeof(exterm));
+	strcpy(exterm, str);
+	result = 0;
+	extermp = exterm;
+	return __expr(n);
 }

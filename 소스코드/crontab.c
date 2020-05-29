@@ -52,6 +52,8 @@ int print_prompt() {
 int validation_check(const char *term) {
 	char *str = "1234567890*-,/";
 	int is_matched;
+	const char *tmp = term;
+
 	while (*term != '\0') {
 		is_matched = 0;
 		for (int i = 0; str[i] != '\0'; i++) {
@@ -65,6 +67,9 @@ int validation_check(const char *term) {
 			return 0;
 		term++;
 	}
+
+	if (parse_execute_term(tmp, -1) == -1) 
+		return 0;
 	return 1;
 }
 

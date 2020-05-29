@@ -7,6 +7,9 @@
 #define CRONTAB_FILE "ssu_crontab_file"
 #define CRONTAB_LOG "ssu_crontab_log"
 
+#define NUM 0
+#define OP 1
+
 typedef struct crontab {
 	char min[SM_BUF_SIZE];
 	char hour[SM_BUF_SIZE];
@@ -17,6 +20,11 @@ typedef struct crontab {
 	struct crontab *next, *prev;
 } crontab;
 
+typedef struct token {
+	int type;
+	int value;
+} token;
+
 char err_str[BUF_SIZE];
 
 int read_crontab_file();
@@ -24,5 +32,7 @@ int add_crontab(crontab *head, crontab *cp);
 int print_crontab(crontab *cp);
 int remove_crontab(crontab *cp);
 int log_crontab(const char *str);
+int parse_execute_term(const char *exterm, int n);
+static int __expr(int n);
 
 #endif
