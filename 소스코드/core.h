@@ -21,5 +21,6 @@ char err_str[BUF_SIZE];
 int read_crontab_file();
 int add_crontab(crontab *head, crontab *cp);
 int print_crontab(crontab *cp);
+int remove_crontab(crontab *cp);
 
 #endif

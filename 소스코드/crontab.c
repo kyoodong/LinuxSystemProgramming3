@@ -8,6 +8,7 @@
 int print_prompt();
 int parse_input(char *input);
 int process_add(crontab *cp);
+int process_remove(int num);
 int validation_check(const char *term);
 
 
@@ -38,7 +39,7 @@ int print_prompt() {
 	printf("\n%s> ", STD_ID); 
 	fgets(buf, sizeof(buf), stdin);
 	buf[strlen(buf) - 1] = '\0';
-	if (parse_input(buf) < 0)
+	if (parse_input(buf) == 1)
 		return -1;
 	return 0;
 }
@@ -77,7 +78,7 @@ int parse_input(char *input) {
 	crontab *crontab_node;
 
 	if (!strncmp(input, "exit", 4)) {
-		return -1;
+		return 1;
 	}
 
 	p = strtok(input, " ");
@@ -142,8 +143,19 @@ int parse_input(char *input) {
 		}
 
 		strcpy(crontab_node->op, p);
-		process_add(crontab_node);
+		if (process_add(crontab_node) < 0)
+			return -1;
 		return 0;
+	} else if (!strcmp(p, "remove")) {
+		p = strtok(NULL, " ");
+		if (p == NULL) {
+			fprintf(stderr, "remove input error\n");
+			return -1;
+		}
+
+		int num = atoi(p);
+		if (process_remove(num) < 0)
+			return -1;
 	}
 
 	return -1;
@@ -168,6 +180,43 @@ int process_add(crontab *cp) {
 	}
 
 	fprintf(fp, "%s %s %s %s %s %s\n", cp->min, cp->hour, cp->day, cp->month, cp->dayofweek, cp->op);
+	fclose(fp);
+	return 0;
+}
+
+/**
+  remove 명령을 처리하는 함수
+  @param num 삭제 할 명령의 인덱스
+  @return
+  */
+int process_remove(int num) {
+	crontab *tmp;
+	FILE *fp;
+
+	tmp = &head;
+	for (int i = 0; i <= num; i++) {
+		if (tmp->next == NULL) {
+			printf("잘못된 번호 입니다.\n");
+			return 1;
+		}
+
+		tmp = tmp->next;
+	}
+
+	if (remove_crontab(tmp) < 0)
+		return -1;
+
+	if ((fp = fopen(CRONTAB_FILE, "w")) == NULL) {
+		fprintf(stderr, "fopen error for %s\n", CRONTAB_FILE);
+		return -1;
+	}
+
+	tmp = head.next;
+	while (tmp != NULL) {
+		fprintf(fp, "%s %s %s %s %s %s\n", tmp->min, tmp->hour, tmp->day, tmp->month, tmp->dayofweek, tmp->op);
+		tmp = tmp->next;
+	}
+
 	fclose(fp);
 	return 0;
 }

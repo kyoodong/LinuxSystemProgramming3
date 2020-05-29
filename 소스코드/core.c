@@ -82,3 +82,25 @@ int print_crontab(crontab *cp) {
 	}
 	return count;
 }
+
+/**
+  crontab 노드를 리스트에서 삭제하는 함수
+  @param cp 삭제할 노드 (헤드 노드는 불가)
+  @return 성공 시 0 에러 시 -1 리턴하고 err_str 설정
+  */
+int remove_crontab(crontab *cp) {
+	if (cp->prev == NULL) {
+		sprintf(err_str, "Cannot remove head node\n");
+		return -1;
+	}
+
+	cp->prev->next = cp->next;
+	if (cp->next != NULL) {
+		cp->next->prev = cp->prev;
+	}
+
+	cp->prev = NULL;
+	cp->next = NULL;
+	free(cp);
+	return 0;
+}
