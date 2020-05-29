@@ -82,6 +82,8 @@ int parse_input(char *input) {
 	}
 
 	p = strtok(input, " ");
+	if (p == NULL)
+		return -1;
 
 	if (!strcmp(p, "add")) {
 		crontab_node = calloc(1, sizeof(crontab));
