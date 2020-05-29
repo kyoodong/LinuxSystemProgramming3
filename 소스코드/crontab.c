@@ -168,6 +168,7 @@ int parse_input(char *input) {
   */
 int process_add(crontab *cp) {
 	FILE *fp;
+	char buf[BUFSIZ];
 
 	if ((fp = fopen(CRONTAB_FILE, "a+")) == NULL) {
 		fprintf(stderr, "fopen error for %s\n", CRONTAB_FILE);
@@ -176,11 +177,15 @@ int process_add(crontab *cp) {
 
 	if (add_crontab(&head, cp) < 0) {
 		fprintf(stderr, "add_crontab error\n");
+		fclose(fp);
 		return -1;
 	}
 
 	fprintf(fp, "%s %s %s %s %s %s\n", cp->min, cp->hour, cp->day, cp->month, cp->dayofweek, cp->op);
 	fclose(fp);
+
+	sprintf(buf, "add %s %s %s %s %s %s\n", cp->min, cp->hour, cp->day, cp->month, cp->dayofweek, cp->op);
+	log_crontab(buf);
 	return 0;
 }
 
@@ -191,7 +196,9 @@ int process_add(crontab *cp) {
   */
 int process_remove(int num) {
 	crontab *tmp;
+	crontab *cpy;
 	FILE *fp;
+	char buf[BUFSIZ];
 
 	tmp = &head;
 	for (int i = 0; i <= num; i++) {
@@ -203,11 +210,26 @@ int process_remove(int num) {
 		tmp = tmp->next;
 	}
 
-	if (remove_crontab(tmp) < 0)
-		return -1;
+	// 노드 삭제 도중 에러 발생 시 복구시키기 위함
+	cpy = calloc(1, sizeof(crontab));
+	strcpy(cpy->min, tmp->min);
+	strcpy(cpy->hour, tmp->hour);
+	strcpy(cpy->day, tmp->day);
+	strcpy(cpy->month, tmp->month);
+	strcpy(cpy->dayofweek, tmp->dayofweek);
+	strcpy(cpy->op, tmp->op);
 
+	if (remove_crontab(tmp) < 0) {
+		free(cpy);
+		return -1;
+	}
+
+	// 파일 재작성
 	if ((fp = fopen(CRONTAB_FILE, "w")) == NULL) {
 		fprintf(stderr, "fopen error for %s\n", CRONTAB_FILE);
+
+		// 파일 적용에 실패하면 다시 리스트에 복귀시킴
+		add_crontab(&head, cpy);
 		return -1;
 	}
 
@@ -218,5 +240,10 @@ int process_remove(int num) {
 	}
 
 	fclose(fp);
+
+	sprintf(buf, "remove %s %s %s %s %s %s\n", cpy->min, cpy->hour, cpy->day, cpy->month, cpy->dayofweek, cpy->op);
+	log_crontab(buf);
+	free(cpy);
+	cpy = NULL;
 	return 0;
 }

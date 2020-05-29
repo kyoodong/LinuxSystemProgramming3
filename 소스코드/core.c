@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
 #include "core.h"
 
 /**
@@ -65,6 +66,11 @@ int add_crontab(crontab *head, crontab *cp) {
 	return 0;
 }
 
+/**
+  crontab 리스트를 출력하는 함수
+  @param cp 리스트 헤드
+  @return 성공 시 리스트 엔트리 갯수, 에러 시 -1
+  */
 int print_crontab(crontab *cp) {
 	int count = 0;
 	crontab *tmp;
@@ -102,5 +108,27 @@ int remove_crontab(crontab *cp) {
 	cp->prev = NULL;
 	cp->next = NULL;
 	free(cp);
+	return 0;
+}
+
+/**
+  로그를 남기는 함수
+  @param str 로그로 남길 문자열
+  @return 성공 시 0 에러 시 -1 리턴하고 err_str 지정
+  */
+int log_crontab(const char *str) {
+	struct tm *tm;
+	time_t t;
+	FILE *fp;
+
+	if ((fp = fopen(CRONTAB_LOG, "a+")) == NULL) {
+		sprintf(err_str, "fopen error for %s\n", CRONTAB_LOG);
+		return -1;
+	}
+
+	t = time(NULL);
+	tm = localtime(&t);
+	fprintf(fp, "[%s] %s\n", strtok(asctime(tm), "\n"), str);
+	fclose(fp);
 	return 0;
 }

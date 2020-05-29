@@ -5,6 +5,7 @@
 #define SM_BUF_SIZE 64
 #define STD_ID "20162489"
 #define CRONTAB_FILE "ssu_crontab_file"
+#define CRONTAB_LOG "ssu_crontab_log"
 
 typedef struct crontab {
 	char min[SM_BUF_SIZE];
@@ -22,5 +23,6 @@ int read_crontab_file();
 int add_crontab(crontab *head, crontab *cp);
 int print_crontab(crontab *cp);
 int remove_crontab(crontab *cp);
+int log_crontab(const char *str);
 
 #endif
