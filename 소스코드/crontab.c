@@ -8,6 +8,7 @@
 int print_prompt();
 int parse_input(char *input);
 int process_add(crontab *cp);
+int validation_check(const char *term);
 
 
 crontab head;
@@ -43,6 +44,30 @@ int print_prompt() {
 }
 
 /**
+  add 명령어에서 실행 주기에 허용되지 않은 문자가 들어있는지 확인하는 함수
+  @param term 실행 주기 문자열
+  @return 문제 없는 실행주기 문자열이면 1, 아니면 0
+  */
+int validation_check(const char *term) {
+	char *str = "1234567890*-,/";
+	int is_matched;
+	while (*term != '\0') {
+		is_matched = 0;
+		for (int i = 0; str[i] != '\0'; i++) {
+			if (*term == str[i]) {
+				is_matched = 1;
+				break;
+			}
+		}
+
+		if (!is_matched)
+			return 0;
+		term++;
+	}
+	return 1;
+}
+
+/**
   입력 파싱하는 함수
   @param input 입력 문자열
   @return
@@ -62,7 +87,7 @@ int parse_input(char *input) {
 
 		// min
 		p = strtok(NULL, " ");
-		if (p == NULL) {
+		if (p == NULL || !validation_check(p)) {
 			fprintf(stderr, "add input error\n");
 			free(crontab_node);
 			return -1;
@@ -71,7 +96,7 @@ int parse_input(char *input) {
 
 		// hour
 		p = strtok(NULL, " ");
-		if (p == NULL) {
+		if (p == NULL || !validation_check(p)) {
 			fprintf(stderr, "add input error\n");
 			free(crontab_node);
 			return -1;
@@ -80,7 +105,7 @@ int parse_input(char *input) {
 
 		// day
 		p = strtok(NULL, " ");
-		if (p == NULL) {
+		if (p == NULL || !validation_check(p)) {
 			fprintf(stderr, "add input error\n");
 			free(crontab_node);
 			return -1;
@@ -89,7 +114,7 @@ int parse_input(char *input) {
 
 		// month
 		p = strtok(NULL, " ");
-		if (p == NULL) {
+		if (p == NULL || !validation_check(p)) {
 			fprintf(stderr, "add input error\n");
 			free(crontab_node);
 			return -1;
@@ -98,7 +123,7 @@ int parse_input(char *input) {
 
 		// dayofweek
 		p = strtok(NULL, " ");
-		if (p == NULL) {
+		if (p == NULL || !validation_check(p)) {
 			fprintf(stderr, "add input error\n");
 			free(crontab_node);
 			return -1;
@@ -115,8 +140,8 @@ int parse_input(char *input) {
 			free(crontab_node);
 			return -1;
 		}
-		strcpy(crontab_node->op, p);
 
+		strcpy(crontab_node->op, p);
 		process_add(crontab_node);
 		return 0;
 	}
