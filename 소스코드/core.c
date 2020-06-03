@@ -144,7 +144,7 @@ int log_crontab(const char *str) {
 
 	t = time(NULL);
 	tm = localtime(&t);
-	fprintf(fp, "[%s] %s\n", strtok(asctime(tm), "\n"), str);
+	fprintf(fp, "[%s] %s", strtok(asctime(tm), "\n"), str);
 	fclose(fp);
 	return 0;
 }

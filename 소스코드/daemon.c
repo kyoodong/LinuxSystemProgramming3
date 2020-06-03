@@ -66,18 +66,17 @@ int process_crontab() {
 	while (ct != NULL) {
 		printf("[ct] min = %s  hour = %s  day = %s  dayofweek = %s  month = %s  op = %s\n", ct->min, ct->hour, ct->day, ct->dayofweek, ct->month, ct->op);
 		if (parse_execute_term(ct->min, tm->tm_min) &&
-				printf("1\n") &&
 			parse_execute_term(ct->hour, tm->tm_hour) &&
-				printf("2\n") &&
 			parse_execute_term(ct->day, tm->tm_mday) &&
-				printf("3\n") &&
 			parse_execute_term(ct->month, tm->tm_mon + 1) &&
-				printf("4\n") &&
 			parse_execute_term(ct->dayofweek, tm->tm_wday)) {
-			printf("실행!\n");
+			
 			// 실행!
 			sprintf(buf, "%s &", ct->op);
 			system(ct->op);
+
+			sprintf(buf, "run %s %s %s %s %s %s\n", ct->min, ct->hour, ct->day, ct->dayofweek, ct->month, ct->op);
+			log_crontab(buf);
 		}
 		ct = ct->next;
 	}
