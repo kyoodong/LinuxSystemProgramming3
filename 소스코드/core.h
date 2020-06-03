@@ -9,6 +9,7 @@
 
 #define NUM 0
 #define OP 1
+#define RANGE 2
 
 typedef struct crontab {
 	char min[SM_BUF_SIZE];

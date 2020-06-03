@@ -170,7 +170,11 @@ static token __get_token() {
 		return t;
 	}
 
-	t.type = OP;
+	if (*extermp == '*')
+		t.type = RANGE;
+	else 
+		t.type = OP;
+
 	t.value = *extermp;
 	return t;
 }
@@ -227,7 +231,7 @@ static token __minus(int n, int table[60]) {
 	t2 = __get_token();
 	if (t2.type == OP && t2.value == '-') {
 		// - 앞에는 무조건 숫자가 와야함
-		if (t.type == OP) {
+		if (t.type != NUM) {
 			result = -1;
 			t.type = OP;
 			t.value = 0;
@@ -239,7 +243,7 @@ static token __minus(int n, int table[60]) {
 
 		// - 다음에는 숫자가 와야함
 		// 연산자가 오면 잘못된 수식
-		if (t3.type == OP) {
+		if (t3.type != NUM) {
 			result = -1;
 			t.type = OP;
 			t.value = 0;
@@ -272,14 +276,15 @@ static token __slash(int n, int table[60]) {
 		return t;
 	}
 
-	if (t.type == OP && t.value == '-') {
+	//if (t.type == OP && t.value == '-') {
+	if (t.type == OP) {
 		t.type = OP;
 		t.value = 0;
 		result = -1;
 		return t;
 	}
 
-	if (t.type == OP && t.value == '*') {
+	if (t.type == RANGE && t.value == '*') {
 		for (int i = 0; i < 60; i++) {
 			table[i] = 1;
 		}
@@ -287,8 +292,8 @@ static token __slash(int n, int table[60]) {
 
 	t2 = __get_token();
 	if (t2.type == OP && t2.value == '/') {
-		// /(슬래쉬) 앞에 *이나 숫자가 아닌 연산자가 오면 에러
-		if (!(t.type == OP && t.value == '*') && !(t.type == NUM)) {
+		// /(슬래쉬) 앞에 *이나 범위가 아닌 숫자나 연산자가 오면 에러
+		if (t.type != RANGE) {
 			result = -1;
 			t.type = OP;
 			t.value = 0;
@@ -300,7 +305,7 @@ static token __slash(int n, int table[60]) {
 
 		// 슬래쉬 다음에 숫자가 와야함
 		// 연산자가 오면 잘못된 수식
-		if (t3.type == OP) {
+		if (t3.type != NUM) {
 			result = -1;
 			t.type = OP;
 			t.value = 0;
