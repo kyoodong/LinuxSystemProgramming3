@@ -27,10 +27,11 @@ typedef struct token {
 
 char err_str[BUF_SIZE];
 
-int read_crontab_file();
+int read_crontab_file(crontab *head);
 int add_crontab(crontab *head, crontab *cp);
 int print_crontab(crontab *cp);
 int remove_crontab(crontab *cp);
+int is_empty_crontab(crontab *head);
 int log_crontab(const char *str);
 int parse_execute_term(const char *exterm, int n);
 static int __expr(int n);

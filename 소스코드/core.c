@@ -117,6 +117,17 @@ int remove_crontab(crontab *cp) {
 }
 
 /**
+	crontab list 가 비어있는지 확인
+	@param head 확인할 리스트 헤드 노드
+	@return 비어있으면 1 아니면 0
+	*/
+int is_empty_crontab(crontab *head) {
+	if (head == NULL)
+		return 1;
+	return head->next == NULL;
+}
+
+/**
   로그를 남기는 함수
   @param str 로그로 남길 문자열
   @return 성공 시 0 에러 시 -1 리턴하고 err_str 지정
@@ -177,15 +188,12 @@ static void __next_token() {
 }
 
 static token __comma(int n) {
-	printf("comma()\n");
 	token t, t2;
 	if (result)
 		return t;
 
 	t = __get_token();
-	printf("%d %d %c\n", t.type, t.value, t.value);
 	if (t.type == OP && t.value == 0) {
-		printf("its null\n");
 		result = -1;
 		t.type = OP;
 		t.value = 0;
@@ -203,7 +211,6 @@ static token __comma(int n) {
 }
 
 static token __minus(int n, int table[60]) {
-	printf("minus()\n");
 	token t, t2, t3;
 
 	t = __comma(n);
@@ -256,7 +263,6 @@ static token __minus(int n, int table[60]) {
 }
 
 static token __slash(int n, int table[60]) {
-	printf("slash()\n");
 	token t, t2, t3;
 
 	t = __minus(n, table);
@@ -271,6 +277,12 @@ static token __slash(int n, int table[60]) {
 		t.value = 0;
 		result = -1;
 		return t;
+	}
+
+	if (t.type == OP && t.value == '*') {
+		for (int i = 0; i < 60; i++) {
+			table[i] = 1;
+		}
 	}
 
 	t2 = __get_token();
@@ -306,7 +318,6 @@ static token __slash(int n, int table[60]) {
 }
 
 static int __expr(int n) {
-	printf("expr()\n");
 	token t;
 	int table[60];
 
@@ -327,10 +338,11 @@ static int __expr(int n) {
 
 // 1-15/2,16-30/3
 int parse_execute_term(const char *str, int n) {
-	printf("parse()\n");
 	memset(exterm, 0, sizeof(exterm));
 	strcpy(exterm, str);
 	result = 0;
 	extermp = exterm;
-	return __expr(n);
+	int ret = __expr(n);
+	printf("%d\n", ret);
+	return ret;
 }
