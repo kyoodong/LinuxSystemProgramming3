@@ -13,11 +13,11 @@
 int is_same_file(const char *src, const char *dest);
 void onexit();
 void on_sigint(int sig);
-int sync_file(int argc, char *argv[], const char *src, const char *dest);
+int sync_file(int argc, char *argv[], const char *src, const char *dest, int toption);
 void sync_dir(const char *src, const char *dest);
-void lock_file(int fd);
+void lock_file(int fd, int length);
 void unlock_file(int fd);
-void log_rsync(int argc, char *argv[], const char *src);
+void log_rsync(int argc, char *argv[], const char *str);
 
 char backup_filepath[BUFSIZ];
 
@@ -103,11 +103,9 @@ int main(int argc, char *argv[]) {
 		else
 			fname++;
 	
-		sprintf(buf, "%s/%s", dst, fname);
-
 		// src와 dest 가 다른 파일이라면 동기화
 		if (!is_same_file(src, buf)) {
-			sync_file(argc, argv, src, buf);
+			sync_file(argc, argv, src, dst, toption);
 		}
 	}
 
@@ -145,25 +143,23 @@ int is_same_file(const char *src, const char *dest) {
 
 /**
   파일을 동기화 시켜주는 함수
+  @param argc 프로그램 인자 수
+  @param argv 프로그램 인자 벡터
   @param src 입력 파일 경로
   @param dest 대상 파일 경로
+  @param toption t 옵션 여부
   @return 동기화 성공 시 0, 에러 시 -1 리턴
   */
-int sync_file(int argc, char *argv[], const char *src, const char *dest) {
+int sync_file(int argc, char *argv[], const char *src, const char *dest, int toption) {
 	int fd;
 	int srcfd;
 	char buf[BUFSIZ];
+	char cwd[BUFSIZ];
 	ssize_t length;
 	struct stat statbuf;
 	struct utimbuf utimbuf;
+	const char *fname, *path;
 
-	sprintf(backup_filepath, "%sXXXXXX", dest);
-
-	// 임시 파일, SIGINT 발생 시 되돌리기 백업용
-	if ((fd = mkstemp(backup_filepath)) < 0) {
-		fprintf(stderr, "mkstemp error\n");
-		exit(1);
-	}
 	
 	// src 파일 열기
 	if ((srcfd = open(src, O_RDONLY)) < 0) {
@@ -171,58 +167,108 @@ int sync_file(int argc, char *argv[], const char *src, const char *dest) {
 		exit(1);
 	}
 
-	lock_file(srcfd);
-
 	length = lseek(srcfd, 0, SEEK_END);
 	if (length < 0 || lseek(srcfd, 0, SEEK_SET) < 0) {
 		fprintf(stderr, "lseek error for %s\n", src);
-		unlock_file(srcfd);
 		exit(1);
 	}
 
+	// 파일 잠금
+	lock_file(srcfd, length);
 
-	// src 파일을 임시파일에 복사
-	while ((length = read(srcfd, buf, sizeof(buf))) > 0)
-		write(fd, buf, length);
-
-	close(srcfd);
-	close(fd);
-
-	if (stat(src, &statbuf) < 0) {
-		fprintf(stderr, "stat error for %s\n", src);
-		unlock_file(srcfd);
-		exit(1);
+	fname = strrchr(src, '/');
+	if (fname == NULL) {
+		fname = src;
+		path = NULL;
+	}
+	else {
+		fname = '\0';
+		fname++;
+		path = src;
 	}
 
-	// 원본 파일과 권한을 똑같이 맞춤
-	if (chmod(backup_filepath, statbuf.st_mode) < 0) {
-		fprintf(stderr, "chmod error for %s\n", backup_filepath);
-		unlock_file(srcfd);
-		exit(1);
+	// toption
+	if (toption) {
+		if (path != NULL) {
+			getcwd(cwd, sizeof(cwd));
+			chdir(path);
+		}
+
+		// tar 생성
+		sprintf(buf, "tar -cvf %s.tar %s", fname, fname);
+		system(buf);
+
+		// tar 파일 옮기기
+		sprintf(buf, "%s.tar", fname);
+		stat(buf, &statbuf);
+
+		sprintf(buf, "tar -xvf %s.tar -C %s", fname, dest);
+		system(buf);
+
+		if (path != NULL)
+			chdir(cwd);
+
+		sprintf(buf, "\ttotalSize %ld\n\t%s", statbuf.st_size, fname);
+		log_rsync(argc, argv, buf);
+	}
+	else {
+		sprintf(backup_filepath, "%sXXXXXX", src);
+
+		// 임시 파일, SIGINT 발생 시 되돌리기 백업용
+		if ((fd = mkstemp(backup_filepath)) < 0) {
+			fprintf(stderr, "mkstemp error\n");
+			exit(1);
+		}
+
+		// src 파일을 임시파일에 복사
+		while ((length = read(srcfd, buf, sizeof(buf))) > 0)
+			write(fd, buf, length);
+	
+		close(fd);
+	
+		if (stat(src, &statbuf) < 0) {
+			fprintf(stderr, "stat error for %s\n", src);
+			unlock_file(srcfd);
+			exit(1);
+		}
+	
+		// 원본 파일과 권한을 똑같이 맞춤
+		if (chmod(backup_filepath, statbuf.st_mode) < 0) {
+			fprintf(stderr, "chmod error for %s\n", backup_filepath);
+			unlock_file(srcfd);
+			exit(1);
+		}
+	
+		// 원본 파일과 수정 시간을 맞춤
+		utimbuf.actime = statbuf.st_atime;
+		utimbuf.modtime = statbuf.st_mtime;
+		if (utime(backup_filepath, &utimbuf) < 0) {
+			fprintf(stderr, "utime error\n");
+			unlock_file(srcfd);
+			exit(1);
+		}
+
+		// @TODO 디버깅용
+		//sleep(15);
+	
+		sprintf(buf, "%s/%s", dest, fname);
+
+		// 임시 파일을 dest 로 바꿔치기
+		if (rename(backup_filepath, buf) < 0) {
+			fprintf(stderr, "rename error for %s to %s\n", backup_filepath, dest);
+			unlock_file(srcfd);
+			exit(1);
+		}
+
+		sprintf(buf, "\t%s %ldbytes", src, statbuf.st_size);
+		log_rsync(argc, argv, buf);
 	}
 
-	// 원본 파일과 수정 시간을 맞춤
-	utimbuf.actime = statbuf.st_atime;
-	utimbuf.modtime = statbuf.st_mtime;
-	if (utime(backup_filepath, &utimbuf) < 0) {
-		fprintf(stderr, "utime error\n");
-		unlock_file(srcfd);
-		exit(1);
-	}
-
-	// @TODO 디버깅용
-	//sleep(15);
-
-	// 임시 파일을 dest 로 바꿔치기
-	if (rename(backup_filepath, dest) < 0) {
-		fprintf(stderr, "rename error for %s to %s\n", backup_filepath, dest);
-		unlock_file(srcfd);
-		exit(1);
-	}
 
 	// 성공적 종료
+	unlock_file(srcfd);
+	close(srcfd);
 	backup_filepath[0] = '\0';
-	log_rsync(argc, argv, src);
 	return 0;
 }
 
@@ -247,15 +293,16 @@ void sync_dir(const char *src, const char *dest) {
 /**
   파일을 잠그는 함수
   @param fd 파일 디스크립터
+  @param length 파일 크기
   */
-void lock_file(int fd) {
+void lock_file(int fd, int length) {
 	struct flock lock;
 
 	// 파일 잠금
 	lock.l_type = F_WRLCK;
 	lock.l_whence = SEEK_SET;
 	lock.l_start = 0;
-	lock.l_len = 0;
+	lock.l_len = length;
 	lock.l_pid = getpid();
 
 	fcntl(fd, F_SETLK, &lock);
@@ -281,13 +328,12 @@ void unlock_file(int fd) {
 /**
   @param argc 프로그램 인자 갯수
   @param argv 프로그램 인자 벡터
-  @param src 
+  @param str 로그 내용
   */
-void log_rsync(int argc, char *argv[], const char *src) {
+void log_rsync(int argc, char *argv[], const char *str) {
 	FILE *fp;
 	time_t t;
 	char buf[BUFSIZ];
-	struct stat statbuf;
 
 	t = time(NULL);
 
@@ -296,23 +342,16 @@ void log_rsync(int argc, char *argv[], const char *src) {
 		exit(1);
 	}
 
-	stat(src, &statbuf);
-
-	// 일반 파일의 경우
-	if (!S_ISDIR(statbuf.st_mode)) {
-		strcpy(buf, argv[0]);
-		for (int i = 1; i < argc; i++) {
-			strcat(buf, " ");
-			strcat(buf, argv[i]);
-		}
-	
-		fprintf(fp, "[%s] %s\n\t%s %ldbytes\n",
-				strtok(ctime(&t), "\n"),
-				buf,
-				src,
-				statbuf.st_size
-		);
+	strcpy(buf, argv[0]);
+	for (int i = 1; i < argc; i++) {
+		strcat(buf, " ");
+		strcat(buf, argv[i]);
 	}
 
+	fprintf(fp, "[%s] %s\n%s\n",
+			strtok(ctime(&t), "\n"),
+			buf,
+			str
+	);
 	fclose(fp);
 }
