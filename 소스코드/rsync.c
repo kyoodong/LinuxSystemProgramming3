@@ -5,11 +5,13 @@
 #include <fcntl.h>
 #include <utime.h>
 #include <string.h>
+#include <signal.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
 int is_same_file(const char *src, const char *dest);
 void onexit();
+void on_sigint(int sig);
 int sync_file(const char *src, const char *dest);
 void sync_dir(const char *src, const char *dest);
 void lock_file(int fd);
@@ -22,13 +24,24 @@ int main(int argc, char *argv[]) {
 	char buf[BUFSIZ];
 	char *fname;
 	struct stat statbuf;
+	struct sigaction sigint;
 
 	if (argc != 3) {
 		fprintf(stderr, "usage: %s <src> <dest>\n", argv[0]);
 		exit(1);
 	}
 
+	// 종료 액션 등록
 	atexit(onexit);
+
+	// SIGINT 액션 등록
+	sigint.sa_flags = 0;
+	sigint.sa_handler = on_sigint;
+	sigemptyset(&sigint.sa_mask);
+	if (sigaction(SIGINT, &sigint, NULL) < 0) {
+		fprintf(stderr, "sigaction error\n");
+		exit(1);
+	}
 
 	// src, dest 가 없는 파일인 경우
 	if (access(argv[1], F_OK) != 0 || access(argv[2], F_OK) != 0) {
@@ -170,7 +183,7 @@ int sync_file(const char *src, const char *dest) {
 	}
 
 	// @TODO 디버깅용
-	sleep(15);
+	//sleep(15);
 
 	// 임시 파일을 dest 로 바꿔치기
 	if (rename(backup_filepath, dest) < 0) {
@@ -189,10 +202,13 @@ int sync_file(const char *src, const char *dest) {
   동기화 하기위해 만들어진 백업 임시 파일을 삭제함
   */
 void onexit() {
-	printf("onexit()\n");
 	if (backup_filepath[0] != 0) {
 		unlink(backup_filepath);
 	}
+}
+
+void on_sigint(int sig) {
+	onexit();
 }
 
 void sync_dir(const char *src, const char *dest) {
