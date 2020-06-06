@@ -13,22 +13,23 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+typedef struct node {
+	char fname[BUF_SIZE];
+	struct stat stat;
+	struct node *prev, *next;
+} node;
+
 int is_same_file(const char *src, const char *dest);
 void onexit();
 void on_sigint(int sig);
 int sync_file(int argc, char *argv[], const char *src, const char *dest, int toption);
-void sync_dir(int argc, char *argv[], const char *src, const char *dest, int roption, int toption, int moption, int depth);
+node *sync_dir(int argc, char *argv[], const char *src, const char *dest, int roption, int toption, int moption, int depth);
 void lock_file(int fd, int length);
 void unlock_file(int fd);
 void log_rsync(int argc, char *argv[], const char *str);
 void copy_file(const char *src, const char *dest);
 void remove_dir(const char *dirpath);
 
-typedef struct node {
-	char fname[BUF_SIZE];
-	struct stat stat;
-	struct node *prev, *next;
-} node;
 
 char backup_filepath[BUF_SIZE];
 int already_exist;
@@ -258,14 +259,14 @@ int sync_file(int argc, char *argv[], const char *src, const char *dest, int top
 		sprintf(backup_filepath, "%s.tar", fname);
 
 		// tar 생성
-		sprintf(buf, "tar -cvf %s.tar %s", backup_filepath, fname);
+		sprintf(buf, "tar -cf %s.tar %s", backup_filepath, fname);
 		system(buf);
 
 		// tar 파일 옮기기
 		sprintf(buf, "%s.tar", fname);
 		stat(buf, &statbuf);
 
-		sprintf(buf, "tar -xvf %s.tar -C %s", fname, dest);
+		sprintf(buf, "tar -xf %s.tar -C %s", fname, dest);
 		system(buf);
 
 		if (path != NULL)
@@ -346,6 +347,9 @@ void onexit() {
 	}
 }
 
+/**
+  SIGINT 캐치함수
+  */
 void on_sigint(int sig) {
 	onexit();
 	exit(0);
@@ -486,11 +490,11 @@ void remove_dir(const char *dirpath) {
 	free(dirp);
 }
 
-void sync_dir(int argc, char *argv[], const char *src, const char *dest, int roption, int toption, int moption, int depth) {
+node *sync_dir(int argc, char *argv[], const char *src, const char *dest, int roption, int toption, int moption, int depth) {
 	const char *fname;
-	char buf[BUF_SIZE];
+	char buf[BUFSIZ];
 	char buf2[BUF_SIZE];
-	node src_list, dst_list, *tmp;
+	node src_list, dst_list, t_list, *tmp;
 	struct dirent **dirp;
 	int count;
 	struct stat statbuf;
@@ -505,7 +509,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 	// 같은 파일이 이미 존재
 	if (is_same_file(src, dest))
-		return;
+		return NULL;
 
 	// 최초 호출
 	if (depth == 0) {
@@ -623,7 +627,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 	// 동기화
 	tmp = src_list.next;
-	while (!is_empty_list(&src_list)) {
+	while (tmp != NULL) {
 		strcpy(buf, src);
 		strcat(buf, "/");
 		strcat(buf, tmp->fname);
@@ -634,6 +638,13 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		
 		// 동일한 파일 존재 시
 		if (is_same_file(buf, buf2)) {
+			// 디렉토리는 같은 파일이라 판명되었지만 하위 파일들이 다를 수 있음
+			if (toption) {
+				prev = sync_dir(argc, argv, buf, buf2, roption, toption, moption, depth + 1);
+				if (prev != NULL)
+					insert_node(&t_list, prev);
+			}
+
 			// dst_list 에서 src 노드를 삭제
 			// 추후 moption에서 남은 dst_list 파일들을 삭제함
 			for (node *n = dst_list.next; n != NULL; n = n->next) {
@@ -650,15 +661,18 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 			continue;
 		}
 
-		// 디렉토리
+		// 디렉토리 동기화
 		if (S_ISDIR(tmp->stat.st_mode)) {
-			// 이미 있는 디렉토리라면 삭제
-			sync_dir(argc, argv, buf, buf2, roption, toption, moption, depth + 1);
+			// toption 아닐 때는 디렉토리를 직접 복사 
+			if (!toption) 
+				sync_dir(argc, argv, buf, buf2, roption, toption, moption, depth + 1);
 		}
 
 		// 일반 파일
 		else {
-			copy_file(buf, buf2);
+			// toption 아닐때는 파일을 직접 복사
+			if (!toption)
+				copy_file(buf, buf2);
 		}
 
 		// dst_list 에서 src 노드를 삭제
@@ -673,7 +687,15 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		// 노드 삭제 및 이동
 		prev = tmp;
 		tmp = tmp->next;
-		remove_node(prev);
+
+		// tar 로 한 번에 묶어야하기 때문에 따로 정리
+		if (!toption)
+			remove_node(prev);
+		else {
+			// tar 로 묶을때는 절대경로로 필요하기 때문에 수정
+			strcpy(prev->fname, buf);
+			insert_node(&t_list, prev);
+		}
 	}
 
 	tmp = dst_list.next;
@@ -693,11 +715,40 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		remove_node(prev);
 	}
 
-	sleep(15);
+	if (depth == 0) {
+		if (toption) {
+			sprintf(buf, "tar -cf %s.tar", src);
 
-	if (already_exist)
-		remove_dir(backup_filepath);
-	backup_filepath[0] = 0;
+			tmp = t_list.next;
+			char *cp = buf + strlen(buf);
+
+			// 동기화 해야하는 파일들 다 tar로 묶음
+			while (tmp != NULL) {
+				cp = stpcpy(cp, " ");
+				cp = stpcpy(cp, tmp->fname);
+
+				prev = tmp;
+				tmp = tmp->next;
+				remove_node(prev);
+			}
+
+			system(buf);
+
+			// tar 해제
+			char *c = strrchr(dest, '/');
+			*c = 0;
+
+			sprintf(buf, "tar -xf %s.tar -C %s", src, dest);
+			system(buf);
+		}
+
+		if (already_exist)
+			remove_dir(backup_filepath);
+
+		backup_filepath[0] = 0;
+	}
+
+	return t_list.next;
 }
 
 /**
