@@ -12,6 +12,9 @@ int is_same_file(const char *src, const char *dest);
 void onexit();
 int sync_file(const char *src, const char *dest);
 void sync_dir(const char *src, const char *dest);
+void lock_file(int fd);
+void unlock_file(int fd);
+
 
 char backup_filepath[BUFSIZ];
 
@@ -121,13 +124,21 @@ int sync_file(const char *src, const char *dest) {
 		exit(1);
 	}
 	
-	printf("%s\n", backup_filepath);
-
 	// src 파일 열기
 	if ((srcfd = open(src, O_RDONLY)) < 0) {
 		fprintf(stderr, "open error for %s\n", src);
 		exit(1);
 	}
+
+	lock_file(srcfd);
+
+	length = lseek(srcfd, 0, SEEK_END);
+	if (length < 0 || lseek(srcfd, 0, SEEK_SET) < 0) {
+		fprintf(stderr, "lseek error for %s\n", src);
+		unlock_file(srcfd);
+		exit(1);
+	}
+
 
 	// src 파일을 임시파일에 복사
 	while ((length = read(srcfd, buf, sizeof(buf))) > 0)
@@ -138,12 +149,14 @@ int sync_file(const char *src, const char *dest) {
 
 	if (stat(src, &statbuf) < 0) {
 		fprintf(stderr, "stat error for %s\n", src);
+		unlock_file(srcfd);
 		exit(1);
 	}
 
 	// 원본 파일과 권한을 똑같이 맞춤
 	if (chmod(backup_filepath, statbuf.st_mode) < 0) {
 		fprintf(stderr, "chmod error for %s\n", backup_filepath);
+		unlock_file(srcfd);
 		exit(1);
 	}
 
@@ -152,15 +165,17 @@ int sync_file(const char *src, const char *dest) {
 	utimbuf.modtime = statbuf.st_mtime;
 	if (utime(backup_filepath, &utimbuf) < 0) {
 		fprintf(stderr, "utime error\n");
+		unlock_file(srcfd);
 		exit(1);
 	}
 
 	// @TODO 디버깅용
-	sleep(5);
+	sleep(15);
 
 	// 임시 파일을 dest 로 바꿔치기
 	if (rename(backup_filepath, dest) < 0) {
 		fprintf(stderr, "rename error for %s to %s\n", backup_filepath, dest);
+		unlock_file(srcfd);
 		exit(1);
 	}
 
@@ -169,6 +184,10 @@ int sync_file(const char *src, const char *dest) {
 	return 0;
 }
 
+/**
+  프로세스 종료 직전 정리하는 함수
+  동기화 하기위해 만들어진 백업 임시 파일을 삭제함
+  */
 void onexit() {
 	printf("onexit()\n");
 	if (backup_filepath[0] != 0) {
@@ -178,4 +197,38 @@ void onexit() {
 
 void sync_dir(const char *src, const char *dest) {
 
+}
+
+/**
+  파일을 잠그는 함수
+  @param fd 파일 디스크립터
+  */
+void lock_file(int fd) {
+	struct flock lock;
+
+	// 파일 잠금
+	lock.l_type = F_WRLCK;
+	lock.l_whence = SEEK_SET;
+	lock.l_start = 0;
+	lock.l_len = 0;
+	lock.l_pid = getpid();
+
+	fcntl(fd, F_SETLK, &lock);
+}
+
+/**
+  파일을 잠그는 함수
+  @param fd 파일 디스크립터
+  */
+void unlock_file(int fd) {
+	struct flock lock;
+
+	// 파일 잠금
+	lock.l_type = F_UNLCK;
+	lock.l_whence = SEEK_SET;
+	lock.l_start = 0;
+	lock.l_len = 0;
+	lock.l_pid = getpid();
+
+	fcntl(fd, F_SETLK, &lock);
 }
