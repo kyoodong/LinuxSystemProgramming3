@@ -6,17 +6,18 @@
 #include <utime.h>
 #include <string.h>
 #include <signal.h>
+#include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
 int is_same_file(const char *src, const char *dest);
 void onexit();
 void on_sigint(int sig);
-int sync_file(const char *src, const char *dest);
+int sync_file(int argc, char *argv[], const char *src, const char *dest);
 void sync_dir(const char *src, const char *dest);
 void lock_file(int fd);
 void unlock_file(int fd);
-
+void log_rsync(int argc, char *argv[], const char *src);
 
 char backup_filepath[BUFSIZ];
 
@@ -79,7 +80,7 @@ int main(int argc, char *argv[]) {
 
 		// src와 dest 가 다른 파일이라면 동기화
 		if (!is_same_file(argv[1], buf)) {
-			sync_file(argv[1], buf);
+			sync_file(argc, argv, argv[1], buf);
 		}
 	}
 
@@ -121,7 +122,7 @@ int is_same_file(const char *src, const char *dest) {
   @param dest 대상 파일 경로
   @return 동기화 성공 시 0, 에러 시 -1 리턴
   */
-int sync_file(const char *src, const char *dest) {
+int sync_file(int argc, char *argv[], const char *src, const char *dest) {
 	int fd;
 	int srcfd;
 	char buf[BUFSIZ];
@@ -194,6 +195,7 @@ int sync_file(const char *src, const char *dest) {
 
 	// 성공적 종료
 	backup_filepath[0] = '\0';
+	log_rsync(argc, argv, src);
 	return 0;
 }
 
@@ -247,4 +249,43 @@ void unlock_file(int fd) {
 	lock.l_pid = getpid();
 
 	fcntl(fd, F_SETLK, &lock);
+}
+
+/**
+  @param argc 프로그램 인자 갯수
+  @param argv 프로그램 인자 벡터
+  @param src 
+  */
+void log_rsync(int argc, char *argv[], const char *src) {
+	FILE *fp;
+	time_t t;
+	char buf[BUFSIZ];
+	struct stat statbuf;
+
+	t = time(NULL);
+
+	if ((fp = fopen("ssu_rsync_log", "a")) == NULL) {
+		fprintf(stderr, "open error for ssu_rsync_log\n");
+		exit(1);
+	}
+
+	stat(src, &statbuf);
+
+	// 일반 파일의 경우
+	if (!S_ISDIR(statbuf.st_mode)) {
+		strcpy(buf, argv[0]);
+		for (int i = 1; i < argc; i++) {
+			strcat(buf, " ");
+			strcat(buf, argv[i]);
+		}
+	
+		fprintf(fp, "[%s] %s\n\t%s %ldbytes\n",
+				strtok(ctime(&t), "\n"),
+				buf,
+				src,
+				statbuf.st_size
+		);
+	}
+
+	fclose(fp);
 }
