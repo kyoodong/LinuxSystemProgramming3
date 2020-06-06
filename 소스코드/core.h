@@ -1,7 +1,7 @@
 #ifndef H_CORE
 #define HCORE 1
 
-#define BUF_SIZE 512
+#define BUF_SIZE 1024
 #define SM_BUF_SIZE 64
 #define STD_ID "20162489"
 #define CRONTAB_FILE "ssu_crontab_file"
