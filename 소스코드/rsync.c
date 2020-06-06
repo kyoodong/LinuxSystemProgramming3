@@ -26,8 +26,13 @@ int main(int argc, char *argv[]) {
 	char *fname;
 	struct stat statbuf;
 	struct sigaction sigint;
+	char *src, *dst;
+	char op;
+	int roption = 0;
+	int toption = 0;
+	int moption = 0;
 
-	if (argc != 3) {
+	if (argc < 3) {
 		fprintf(stderr, "usage: %s <src> <dest>\n", argv[0]);
 		exit(1);
 	}
@@ -44,14 +49,36 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
+	while ((op = getopt(argc, argv, "rtm")) != -1) {
+		switch (op) {
+			case 'r':
+				roption = 1;
+				break;
+
+			case 't':
+				toption = 1;
+				break;
+
+			case 'm':
+				moption = 1;
+				break;
+
+			case '?':
+				break;
+		}
+	}
+
+	src = argv[optind];
+	dst = argv[optind + 1];
+
 	// src, dest 가 없는 파일인 경우
-	if (access(argv[1], F_OK) != 0 || access(argv[2], F_OK) != 0) {
+	if (access(src, F_OK) != 0 || access(dst, F_OK) != 0) {
 		fprintf(stderr, "usage: %s <src> <dest>\n", argv[0]);
 		exit(1);
 	}
 
-	if (stat(argv[2], &statbuf) < 0) {
-		fprintf(stderr, "stat error for %s\n", argv[2]);
+	if (stat(dst, &statbuf) < 0) {
+		fprintf(stderr, "stat error for %s\n", dst);
 		exit(1);
 	}
 
@@ -61,26 +88,26 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
-	if (stat(argv[1], &statbuf) < 0) {
-		fprintf(stderr, "stat error for %s\n", argv[1]);
+	if (stat(src, &statbuf) < 0) {
+		fprintf(stderr, "stat error for %s\n", src);
 		exit(1);
 	}
 
 	// src 가 디렉토리인 경우
 	if (S_ISDIR(statbuf.st_mode))
-		sync_dir(argv[1], argv[2]);
+		sync_dir(src, dst);
 	else {
-		fname = strrchr(argv[1], '/');
+		fname = strrchr(src, '/');
 		if (fname == 0)
 			fname = argv[1];
 		else
 			fname++;
 	
-		sprintf(buf, "%s/%s", argv[2], fname);
+		sprintf(buf, "%s/%s", dst, fname);
 
 		// src와 dest 가 다른 파일이라면 동기화
-		if (!is_same_file(argv[1], buf)) {
-			sync_file(argc, argv, argv[1], buf);
+		if (!is_same_file(src, buf)) {
+			sync_file(argc, argv, src, buf);
 		}
 	}
 
