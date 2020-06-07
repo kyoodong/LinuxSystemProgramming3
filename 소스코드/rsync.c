@@ -13,6 +13,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#define USAGE "usage: ssu_rsync [option] <src> <dest>\n\t-r : recursive sync\n\t-t : sync using tar\n\t-m : Fully sync\n"
+
 typedef struct node {
 	char fname[BUF_SIZE];
 	struct stat stat;
@@ -49,7 +51,7 @@ int main(int argc, char *argv[]) {
 	int moption = 0;
 
 	if (argc < 3) {
-		fprintf(stderr, "usage: %s <src> <dest>\n", argv[0]);
+		fprintf(stderr, USAGE);
 		exit(1);
 	}
 
@@ -86,7 +88,7 @@ int main(int argc, char *argv[]) {
 
 	// src, dest 가 없는 파일인 경우
 	if (access(argv[optind], F_OK) != 0 || access(argv[optind + 1], F_OK) != 0) {
-		fprintf(stderr, "usage: %s <src> <dest>\n", argv[0]);
+		fprintf(stderr, USAGE);
 		exit(1);
 	}
 
@@ -140,7 +142,7 @@ int main(int argc, char *argv[]) {
 
 	// dest 가 디렉토리가 아닌 경우
 	if (!S_ISDIR(statbuf.st_mode)) {
-		fprintf(stderr, "usage: %s <src> <dest>\n", argv[0]);
+		fprintf(stderr, USAGE);
 		exit(1);
 	}
 
@@ -266,6 +268,22 @@ int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) 
 	struct utimbuf utimbuf;
 	char *fname;
 
+	// src 읽기 권한 없는 경우
+	if (access(src, R_OK) != 0) {
+		fprintf(stderr, USAGE);
+		exit(1);
+	}
+
+	// dest 디렉토리 접근권한 없는 경우  
+	if (access(dest, F_OK) == 0) {
+		if (access(dest, R_OK) != 0 || access(dest, W_OK) != 0 || access(dest, X_OK) != 0) {
+			fprintf(stderr, USAGE);
+			exit(1);
+		}
+	}
+
+	// 같은 파일이 이미 존재
+	if (is_same_file(src, dest))
 	fname = strrchr(src, '/');
 	*fname = 0;
 	strcpy(path, src);
@@ -419,14 +437,26 @@ void copy_file(const char *src, const char *dest) {
 
 	// dest 파일이 있으면
 	if (access(dest, F_OK) == 0) {
+		// 쓰기권한 체크
+		if (access(dest, W_OK) != 0) {
+			fprintf(stderr, USAGE);
+			exit(1);
+		}
+
 		if (stat(dest, &sb) < 0) {
 			fprintf(stderr, "stat error for %s\n", dest);
 			exit(1);
 		}
 
 		// 삭제
-		if (S_ISDIR(sb.st_mode))
+		if (S_ISDIR(sb.st_mode)) {
+			// 디렉토리는 access 권한까지 체크
+			if (access(dest, X_OK) != 0) {
+				fprintf(stderr, USAGE);
+				exit(1);
+			}
 			remove_dir(dest);
+		}
 		else
 			remove(dest);
 	}
@@ -579,6 +609,20 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		fname++;
 	}
 
+	// src 디렉토리 접근권한 없는 경우
+	if (access(src, R_OK) != 0 || access(src, W_OK) != 0 || access(src, X_OK) != 0) {
+		fprintf(stderr, USAGE);
+		exit(1);
+	}
+
+	// dest 디렉토리 접근권한 없는 경우  
+	if (access(dest, F_OK) == 0) {
+		if (access(dest, R_OK) != 0 || access(dest, W_OK) != 0 || access(dest, X_OK) != 0) {
+			fprintf(stderr, USAGE);
+			exit(1);
+		}
+	}
+
 	// 같은 파일이 이미 존재
 	if (is_same_file(src, dest))
 		return;
@@ -644,11 +688,19 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		}
 	}
 
+	// src 디렉토리에 어떤 파일이 있는지 확인
 	for (int i = 0; i < count; i++) {
 		if (!strcmp(dirp[i]->d_name, ".") || !strcmp(dirp[i]->d_name, ".."))
 			continue;
 
 		sprintf(buf, "%s/%s", src, dirp[i]->d_name);
+
+		// 권한 없음
+		if (access(buf, R_OK) != 0) {
+			fprintf(stderr, USAGE);
+			exit(1);
+		}
+
 		if (stat(buf, &statbuf) < 0) {
 			fprintf(stderr, "stat error for %s\n", buf);
 			exit(1);
@@ -658,6 +710,12 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 			// roption 꺼져있으면 디렉토리는 제낌
 			if (!roption)
 				continue;
+
+			// 디렉토리는 write, execute 권한 추가 검사
+			if (access(buf, W_OK) != 0 || access(buf, X_OK) != 0) {
+				fprintf(stderr, USAGE);
+				exit(1);
+			}
 		}
 
 		// 노드 세팅
@@ -690,9 +748,15 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		}
 
 		// roption 꺼져있으면 디렉토리는 제낌
-		if (!roption) {
-			if (S_ISDIR(statbuf.st_mode))
+		if (S_ISDIR(statbuf.st_mode)) {
+			if (!roption)
 				continue;
+
+			// 디렉토리는 write, execute 권한 추가 검사
+			if (access(buf, W_OK) != 0 || access(buf, X_OK) != 0) {
+				fprintf(stderr, USAGE);
+				exit(1);
+			}
 		}
 
 		// 노드 세팅
