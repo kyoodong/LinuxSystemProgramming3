@@ -84,6 +84,12 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	// src, dest 가 없는 파일인 경우
+	if (access(argv[optind], F_OK) != 0 || access(argv[optind + 1], F_OK) != 0) {
+		fprintf(stderr, "usage: %s <src> <dest>\n", argv[0]);
+		exit(1);
+	}
+
 	// src 내에 '/' 가 한 개도 없다면
 	if ((fname = strrchr(argv[optind], '/')) == NULL) {
 		sprintf(buf, "./%s", argv[optind]);
@@ -126,11 +132,6 @@ int main(int argc, char *argv[]) {
 	if (dst[strlen(dst) - 1] == '/')
 		dst[strlen(dst) - 1] = 0;
 
-	// src, dest 가 없는 파일인 경우
-	if (access(src, F_OK) != 0 || access(dst, F_OK) != 0) {
-		fprintf(stderr, "usage: %s <src> <dest>\n", argv[0]);
-		exit(1);
-	}
 
 	if (stat(dst, &statbuf) < 0) {
 		fprintf(stderr, "stat error for %s\n", dst);
