@@ -745,7 +745,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 				}
 
 				sprintf(buf, "totalSize : 0bytes\n");
-				cp = buf;
+				cp = buf + strlen(buf);
 			} else {
 				sprintf(buf, "tar -cf %s.tar", src);
 				cp = buf + strlen(buf);
@@ -800,13 +800,14 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 			// 삭제되는 파일들 목록
 			while (tmp != NULL) {
-				cp += sprintf(cp, "\t%s delete\n", tmp->fname + length);
+				cp += sprintf(cp, "\t%s delete\n", tmp->fname);
 
 				prev = tmp;
 				tmp = tmp->next;
 				remove_node(prev);
 			}
 
+			buf[strlen(buf) - 1] = 0;
 			log_rsync(argc, argv, buf);
 		}
 		
