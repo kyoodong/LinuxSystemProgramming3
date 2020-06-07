@@ -216,22 +216,16 @@ int sync_file(int argc, char *argv[], const char *src, const char *dest, int top
 	int fd;
 	int srcfd;
 	char buf[BUF_SIZE];
-	char cwd[BUF_SIZE];
 	ssize_t length;
 	struct stat statbuf;
 	struct utimbuf utimbuf;
-	const char *fname, *path;
+	const char *fname;
 
 	fname = strrchr(src, '/');
-	if (fname == NULL) {
+	if (fname == NULL)
 		fname = src;
-		path = NULL;
-	}
-	else {
-		fname = '\0';
+	else
 		fname++;
-		path = src;
-	}
 
 	sprintf(buf, "%s/%s", dest, fname);
 	if (is_same_file(src, buf))
@@ -252,29 +246,19 @@ int sync_file(int argc, char *argv[], const char *src, const char *dest, int top
 	// 파일 잠금
 	lock_file(srcfd, length);
 
-
 	// toption
 	if (toption) {
-		if (path != NULL) {
-			getcwd(cwd, sizeof(cwd));
-			chdir(path);
-		}
-
-		sprintf(backup_filepath, "%s.tar", fname);
+		sprintf(backup_filepath, "%s.tar", src);
 
 		// tar 생성
-		sprintf(buf, "tar -cf %s.tar %s", backup_filepath, fname);
+		sprintf(buf, "tar -cf %s %s", backup_filepath, src);
 		system(buf);
 
 		// tar 파일 옮기기
-		sprintf(buf, "%s.tar", fname);
-		stat(buf, &statbuf);
+		stat(backup_filepath, &statbuf);
 
-		sprintf(buf, "tar -xf %s.tar -C %s", fname, dest);
+		sprintf(buf, "tar -xf %s -C %s", backup_filepath, dest);
 		system(buf);
-
-		if (path != NULL)
-			chdir(cwd);
 
 		// 로깅
 		sprintf(buf, "\ttotalSize %ld\n\t%s", statbuf.st_size, fname);
