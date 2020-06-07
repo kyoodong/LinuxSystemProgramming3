@@ -191,6 +191,9 @@ int is_same_node(node *lhs, node *rhs) {
 void insert_node(node *head, node *elem) {
 	elem->next = head->next;
 	elem->prev = head;
+
+	if (head->next != NULL)
+		head->next->prev = elem;
 	head->next = elem;
 }
 
@@ -681,6 +684,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		free(dirp[i]);
 	free(dirp);
 
+
 	// 동기화
 	tmp = src_list.next;
 	while (tmp != NULL) {
@@ -772,6 +776,16 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 			prev = tmp;
 			tmp = tmp->next;
+			
+			char *cp = buf + strlen(buf) - 1;
+	
+			// tar 로 묶을때는 절대경로로 필요하기 때문에 수정
+			for (int i = 0; i <= depth + 1;) {
+				if (*cp == '/')
+					i++;
+				cp--;
+			}
+			strcpy(prev->fname, cp + 2);
 
 			// 삭제 리스트 추가 (로깅용)
 			insert_node(&glob_delete_list, prev);
@@ -879,6 +893,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		
 		// toption 없이 직접 동기화하는 작업
 		else {
+			// 동기화 파일 리스트
 			tmp = glob_sync_list.next;
 			char *cp = buf;
 
@@ -890,6 +905,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 				remove_node(prev);
 			}
 
+			// 삭제 파일 리스트
 			tmp = glob_delete_list.next;
 
 			// 동기화 해야하는 파일들 다 tar로 묶음
