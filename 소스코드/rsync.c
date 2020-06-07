@@ -101,6 +101,10 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	// '/' 로 끝나는 경로
+	if (src[strlen(src) - 1] == '/')
+		src[strlen(src) - 1] = 0;
+
 	// dst 내에 '/' 가 한 개도 없다면
 	if ((fname = strrchr(argv[optind + 1], '/')) == NULL) {
 		sprintf(buf, "./%s", argv[optind + 1]);
@@ -117,6 +121,10 @@ int main(int argc, char *argv[]) {
 			exit(1);
 		}
 	}
+
+	// '/' 로 끝나는 경로
+	if (dst[strlen(dst) - 1] == '/')
+		dst[strlen(dst) - 1] = 0;
 
 	// src, dest 가 없는 파일인 경우
 	if (access(src, F_OK) != 0 || access(dst, F_OK) != 0) {
@@ -784,7 +792,13 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 			
 			// 동기화 할 파일 있음
 			else {
+				char *c;
+
 				getcwd(cwd, sizeof(cwd));
+				c = strrchr(src, '/');
+				*c = 0;
+				chdir(src);
+				*c = '/';
 
 				sprintf(buf, "tar -cf %s.tar", src);
 				cp = buf + strlen(buf);
@@ -796,16 +810,17 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 	
 					tmp = tmp->next;
 				}
-	
-	
 				system(buf);
+				chdir(cwd);
 	
-				char *c = strrchr(dest, '/');
+				c = strrchr(dest, '/');
 				*c = 0;
 	
 				// tar 해제
 				sprintf(buf, "tar -xf %s.tar -C %s", src, dest);
 				system(buf);
+
+				*c = '/';
 	
 				// tar 크기 확인
 				sprintf(buf2, "%s.tar", src);
@@ -823,7 +838,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 	
 				// 동기화 해야하는 파일들 다 tar로 묶음
 				while (tmp != NULL) {
-					cp += sprintf(cp, "\t%s %ldbytes\n", tmp->fname + length, tmp->stat.st_size);
+					cp += sprintf(cp, "\t%s %ldbytes\n", strchr(tmp->fname, '/') + 1, tmp->stat.st_size);
 	
 					prev = tmp;
 					tmp = tmp->next;
