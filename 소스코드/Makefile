@@ -16,7 +16,7 @@ rsync:
 
 clear:
 	rm -f ssu_crontab ssu_crond ssu_rsync core.o
-#rm -rf testdir/*
+	rm -rf testdir/*
 
 core:
 	gcc -c core.c -o core.o

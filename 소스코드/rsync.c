@@ -484,6 +484,16 @@ void copy_file(const char *src, const char *dest) {
 		exit(1);
 	}
 
+	// 파일 소유자 수정
+	chown(dest, statbuf.st_uid, statbuf.st_gid);
+	/*
+	if (chown(dest, statbuf.st_uid, statbuf.st_gid) < 0) {
+		fprintf(stderr, "chown error for %s %d %d\n", dest, statbuf.st_uid, statbuf.st_gid);
+		unlock_file(srcfd);
+		exit(1);
+	}
+	*/
+
 	close(fd);
 }
 
