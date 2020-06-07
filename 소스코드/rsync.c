@@ -398,7 +398,7 @@ void copy_file(const char *src, const char *dest) {
 	int srcfd;
 	char buf[BUF_SIZE];
 	struct utimbuf utimbuf;
-	struct stat statbuf;
+	struct stat statbuf, sb;
 	size_t length;
 
 	// src 파일이 없으면 취소
@@ -409,6 +409,23 @@ void copy_file(const char *src, const char *dest) {
 		fprintf(stderr, "stat error for %s\n", src);
 		unlock_file(srcfd);
 		exit(1);
+	}
+
+	if (S_ISDIR(statbuf.st_mode))
+		return;
+
+	// dest 파일이 있으면
+	if (access(dest, F_OK) == 0) {
+		if (stat(dest, &sb) < 0) {
+			fprintf(stderr, "stat error for %s\n", dest);
+			exit(1);
+		}
+
+		// 삭제
+		if (S_ISDIR(sb.st_mode))
+			remove_dir(dest);
+		else
+			remove(dest);
 	}
 
 	if ((srcfd = open(src, O_RDONLY)) < 0) {
@@ -946,7 +963,7 @@ void log_rsync(int argc, char *argv[], const char *str) {
 		exit(1);
 	}
 
-	strcpy(buf, argv[0]);
+	strcpy(buf, "ssu_rsync");
 	for (int i = 1; i < argc; i++) {
 		strcat(buf, " ");
 		strcat(buf, argv[i]);
