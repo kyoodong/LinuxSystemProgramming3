@@ -246,7 +246,7 @@ int is_same_file(const char *src, const char *dest) {
 int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) {
 	int fd;
 	int srcfd;
-	char buf[BUF_SIZE];
+	char buf[BUFSIZ];
 	char cwd[BUF_SIZE];
 	char path[BUF_SIZE];
 	ssize_t length;
@@ -289,7 +289,6 @@ int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) 
 		// tar 생성
 		sprintf(buf, "tar -cf %s %s", backup_filepath, fname);
 		system(buf);
-		printf("%s\n", buf);
 
 		sprintf(buf, "tar -xf %s -C %s", backup_filepath, dest);
 		system(buf);
@@ -519,6 +518,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 	const char *fname;
 	char buf[BUFSIZ];
 	char buf2[BUF_SIZE];
+	char cwd[BUF_SIZE];
 	node src_list, dst_list, *tmp;
 	struct dirent **dirp;
 	int count;
@@ -721,20 +721,30 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		tmp = tmp->next;
 
 		if (toption) {
+			char *cp = buf + strlen(buf) - 1;
+
 			// tar 로 묶을때는 절대경로로 필요하기 때문에 수정
-			strcpy(prev->fname, buf);
+			for (int i = -1; i <= depth;) {
+				if (*cp == '/')
+					i++;
+				cp--;
+			}
+			strcpy(prev->fname, cp + 2);
 		}
 
 		insert_node(&glob_sync_list, prev);
 	}
 
+	// 대상 디렉토리의 파일 중에서 소스 디렉토리의 파일에 없었던 파일들을 순회
 	tmp = dst_list.next;
 	while (tmp != NULL) {
+		// 소스 디렉토리에 없는 파일은 지우는 옵션 : m
 		if (moption) {
 			strcpy(buf, dest);
 			strcat(buf, "/");
 			strcat(buf, tmp->fname);
-			// 디렉토리
+
+			// 삭제
 			if (S_ISDIR(tmp->stat.st_mode))
 				remove_dir(buf);
 			else
@@ -743,6 +753,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 			prev = tmp;
 			tmp = tmp->next;
 
+			// 삭제 리스트 추가 (로깅용)
 			insert_node(&glob_delete_list, prev);
 			continue;
 		}
@@ -757,6 +768,8 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 			int length = strlen(src) + 1;
 
 			tmp = glob_sync_list.next;
+
+			// 동기화 할 파일이 없는 경우
 			if (tmp == NULL) {
 				tmp = glob_delete_list.next;
 
@@ -767,7 +780,12 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 				sprintf(buf, "totalSize : 0bytes\n");
 				cp = buf + strlen(buf);
-			} else {
+			}
+			
+			// 동기화 할 파일 있음
+			else {
+				getcwd(cwd, sizeof(cwd));
+
 				sprintf(buf, "tar -cf %s.tar", src);
 				cp = buf + strlen(buf);
 	
