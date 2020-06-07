@@ -159,13 +159,13 @@ void insert_node(node *head, node *elem) {
   @param elem 삭제할 노드
   */
 void remove_node(node *elem) {
-	if (elem->prev != NULL) {
+	if (elem->prev != NULL)
 		elem->prev->next = elem->next;
-	}
 
-	if (elem->next != NULL) {
+	if (elem->next != NULL)
 		elem->next->prev = elem->prev;
-	}
+
+	elem->next = elem->prev = NULL;
 
 	free(elem);
 }
@@ -504,6 +504,11 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 	struct stat statbuf;
 	node *prev;
 
+	src_list.next = NULL;
+	src_list.prev = NULL;
+	dst_list.next = NULL;
+	dst_list.prev = NULL;
+
 	fname = strrchr(src, '/');
 	if (fname == NULL) {
 		fname = src;
@@ -703,7 +708,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 	}
 
 	tmp = dst_list.next;
-	while (!is_empty_list(&dst_list)) {
+	while (tmp != NULL) {
 		if (moption) {
 			strcpy(buf, dest);
 			strcat(buf, "/");
@@ -727,62 +732,75 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 	if (depth == 0) {
 		if (toption) {
-			sprintf(buf, "tar -cf %s.tar", src);
-
-			tmp = glob_sync_list.next;
-			// @TODO 만약 tar 해야할게 없다면..?
-			if (tmp == NULL) {
-				printf("null!!!\n");
-			}
-
-			char *cp = buf + strlen(buf);
-
-			// 동기화 해야하는 파일들 다 tar로 묶음
-			while (tmp != NULL) {
-				cp = stpcpy(cp, " ");
-				cp = stpcpy(cp, tmp->fname);
-
-				tmp = tmp->next;
-			}
-
-
-			system(buf);
-
-			char *c = strrchr(dest, '/');
-			*c = 0;
-
-			// tar 해제
-			sprintf(buf, "tar -xf %s.tar -C %s", src, dest);
-			system(buf);
-
-			// tar 크기 확인
-			sprintf(buf2, "%s.tar", src);
-			if (stat(buf2, &statbuf) < 0) {
-				fprintf(stderr, "stat error for %s\n", buf2);
-				remove(buf2);
-				exit(1);
-			}
-
-			sprintf(buf, "totalSize : %ldbytes", statbuf.st_size);
-
-			tmp = glob_sync_list.next;
-			cp = buf + strlen(buf);
+			char *cp;
 			int length = strlen(src) + 1;
 
-			// 동기화 해야하는 파일들 다 tar로 묶음
-			while (tmp != NULL) {
-				cp += sprintf(cp, "\n\t%s %ldbytes", tmp->fname + length, tmp->stat.st_size);
+			tmp = glob_sync_list.next;
+			if (tmp == NULL) {
+				tmp = glob_delete_list.next;
 
-				prev = tmp;
-				tmp = tmp->next;
-				remove_node(prev);
+				// 지워야할 항목 조차 없다면
+				if (tmp == NULL) {
+					exit(0);
+				}
+
+				sprintf(buf, "totalSize : 0bytes\n");
+				cp = buf;
+			} else {
+				sprintf(buf, "tar -cf %s.tar", src);
+				cp = buf + strlen(buf);
+	
+				// 동기화 해야하는 파일들 다 tar로 묶음
+				while (tmp != NULL) {
+					cp = stpcpy(cp, " ");
+					cp = stpcpy(cp, tmp->fname);
+	
+					tmp = tmp->next;
+				}
+	
+	
+				system(buf);
+	
+				char *c = strrchr(dest, '/');
+				*c = 0;
+	
+				// tar 해제
+				sprintf(buf, "tar -xf %s.tar -C %s", src, dest);
+				system(buf);
+	
+				// tar 크기 확인
+				sprintf(buf2, "%s.tar", src);
+				if (stat(buf2, &statbuf) < 0) {
+					fprintf(stderr, "stat error for %s\n", buf2);
+					remove(buf2);
+					exit(1);
+				}
+	
+				sprintf(buf, "totalSize : %ldbytes\n", statbuf.st_size);
+	
+				// 동기화
+				tmp = glob_sync_list.next;
+				cp = buf + strlen(buf);
+	
+				// 동기화 해야하는 파일들 다 tar로 묶음
+				while (tmp != NULL) {
+					cp += sprintf(cp, "\t%s %ldbytes\n", tmp->fname + length, tmp->stat.st_size);
+	
+					prev = tmp;
+					tmp = tmp->next;
+					remove_node(prev);
+				}
+
+				// tar 삭제
+				remove(buf2);
 			}
 
+			// 삭제 동기화
 			tmp = glob_delete_list.next;
 
-			// 동기화 해야하는 파일들 다 tar로 묶음
+			// 삭제되는 파일들 목록
 			while (tmp != NULL) {
-				cp += sprintf(cp, "\n\t%s delete", tmp->fname + length);
+				cp += sprintf(cp, "\t%s delete\n", tmp->fname + length);
 
 				prev = tmp;
 				tmp = tmp->next;
@@ -790,10 +808,10 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 			}
 
 			log_rsync(argc, argv, buf);
-
-			// tar 삭제
-			remove(buf2);
-		} else {
+		}
+		
+		// toption 없이 직접 동기화하는 작업
+		else {
 			tmp = glob_sync_list.next;
 			char *cp = buf;
 
@@ -816,7 +834,6 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 				remove_node(prev);
 			}
 			buf[strlen(buf) - 1] = 0;
-			printf("%s\n", buf);
 			log_rsync(argc, argv, buf);
 		}
 
