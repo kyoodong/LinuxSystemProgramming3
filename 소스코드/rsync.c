@@ -543,6 +543,19 @@ void remove_dir(const char *dirpath) {
 	free(dirp);
 }
 
+const char *get_path(const char *path, int depth) {
+	const char *cp = path + strlen(path) - 1;
+
+	// tar 로 묶을때는 절대경로로 필요하기 때문에 수정
+	for (int i = 0; i <= depth + 1;) {
+		if (*cp == '/')
+			i++;
+		cp--;
+	}
+
+	return cp + 2;
+}
+
 void sync_dir(int argc, char *argv[], const char *src, const char *dest, int roption, int toption, int moption, int depth) {
 	const char *fname;
 	char buf[BUFSIZ];
@@ -570,6 +583,12 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 	if (is_same_file(src, dest))
 		return;
 
+	// src 디렉토리 읽기
+	if ((count = scandir(src, &dirp, NULL, NULL)) < 0) {
+		fprintf(stderr, "scandir error for %s\n", src);
+		exit(1);
+	}
+
 	// 최초 호출
 	if (depth == 0) {
 		// dest 파일이 존재하긴 하다면
@@ -592,6 +611,8 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 	}
 	// 재귀 호출
 	else {
+		node *n;
+
 		// 없는 디렉토리라면 디렉토리 생성
 		if (access(dest, F_OK) != 0) {
 			if (stat(src, &statbuf) < 0) {
@@ -608,16 +629,19 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 			}
 	
 			// dest 가 일반 파일이면
-			if (!S_ISDIR(statbuf.st_mode))
+			if (!S_ISDIR(statbuf.st_mode)) {
 				// 삭제
 				remove(dest);
+			}
 		}
-	}
 
-	// src 디렉토리 읽기
-	if ((count = scandir(src, &dirp, NULL, NULL)) < 0) {
-		fprintf(stderr, "scandir error for %s\n", src);
-		exit(1);
+		// src가 빈 디렉토리인 경우
+		if (count == 2) {
+			n = malloc(sizeof(node));
+			strcpy(n->fname, get_path(src, depth - 1));
+			n->stat.st_size = 0;
+			insert_node(&glob_sync_list, n);
+		}
 	}
 
 	for (int i = 0; i < count; i++) {
@@ -683,7 +707,6 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 	for (int i = 0; i < count; i++)
 		free(dirp[i]);
 	free(dirp);
-
 
 	// 동기화
 	tmp = src_list.next;
@@ -797,6 +820,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 	}
 
 	if (depth == 0) {
+		memset(buf, 0, sizeof(buf));
 		if (toption) {
 			char *cp;
 			int length = strlen(src) + 1;
