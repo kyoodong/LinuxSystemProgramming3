@@ -26,7 +26,7 @@ node glob_delete_list;
 int is_same_file(const char *src, const char *dest);
 void onexit();
 void on_sigint(int sig);
-int sync_file(int argc, char *argv[], const char *src, const char *dest, int toption);
+int sync_file(int argc, char *argv[], char *src, const char *dest, int toption);
 void sync_dir(int argc, char *argv[], const char *src, const char *dest, int roption, int toption, int moption, int depth);
 void lock_file(int fd, int length);
 void unlock_file(int fd);
@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
 	char buf[BUF_SIZE];
 	struct stat statbuf;
 	struct sigaction sigint;
-	char *src, *dst, *fname;
+	char src[BUF_SIZE], dst[BUF_SIZE], *fname;
 	char op;
 	int roption = 0;
 	int toption = 0;
@@ -84,8 +84,39 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	src = argv[optind];
-	dst = argv[optind + 1];
+	// src 내에 '/' 가 한 개도 없다면
+	if ((fname = strrchr(argv[optind], '/')) == NULL) {
+		sprintf(buf, "./%s", argv[optind]);
+		
+		if (realpath(buf, src) == NULL) {
+			fprintf(stderr, "realpath error for %s\n", buf);
+			exit(1);
+		}
+	}
+	// src 내에 '/' 가 있다면
+	else {
+		if (realpath(argv[optind], src) == NULL) {
+			fprintf(stderr, "realpath error for %s\n", argv[optind]);
+			exit(1);
+		}
+	}
+
+	// dst 내에 '/' 가 한 개도 없다면
+	if ((fname = strrchr(argv[optind + 1], '/')) == NULL) {
+		sprintf(buf, "./%s", argv[optind + 1]);
+		
+		if (realpath(buf, dst) == NULL) {
+			fprintf(stderr, "realpath error for %s\n", buf);
+			exit(1);
+		}
+	}
+	// dst 내에 '/' 가 있다면
+	else {
+		if (realpath(argv[optind + 1], dst) == NULL) {
+			fprintf(stderr, "realpath error for %s\n", argv[optind + 1]);
+			exit(1);
+		}
+	}
 
 	// src, dest 가 없는 파일인 경우
 	if (access(src, F_OK) != 0 || access(dst, F_OK) != 0) {
@@ -212,20 +243,21 @@ int is_same_file(const char *src, const char *dest) {
   @param toption t 옵션 여부
   @return 동기화 성공 시 0, 에러 시 -1 리턴
   */
-int sync_file(int argc, char *argv[], const char *src, const char *dest, int toption) {
+int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) {
 	int fd;
 	int srcfd;
 	char buf[BUF_SIZE];
+	char cwd[BUF_SIZE];
+	char path[BUF_SIZE];
 	ssize_t length;
 	struct stat statbuf;
 	struct utimbuf utimbuf;
-	const char *fname;
+	char *fname;
 
 	fname = strrchr(src, '/');
-	if (fname == NULL)
-		fname = src;
-	else
-		fname++;
+	*fname = 0;
+	strcpy(path, src);
+	*fname++ = '/';
 
 	sprintf(buf, "%s/%s", dest, fname);
 	if (is_same_file(src, buf))
@@ -248,24 +280,29 @@ int sync_file(int argc, char *argv[], const char *src, const char *dest, int top
 
 	// toption
 	if (toption) {
+		// 해당 디렉토리로 chdir. tar 할 때 디렉토리경로까지 묶이는 문제를 해결하기 위함
+		getcwd(cwd, sizeof(cwd));
+		chdir(path);
+
 		sprintf(backup_filepath, "%s.tar", src);
 
 		// tar 생성
-		sprintf(buf, "tar -cf %s %s", backup_filepath, src);
+		sprintf(buf, "tar -cf %s %s", backup_filepath, fname);
 		system(buf);
-
-		// tar 파일 옮기기
-		stat(backup_filepath, &statbuf);
+		printf("%s\n", buf);
 
 		sprintf(buf, "tar -xf %s -C %s", backup_filepath, dest);
 		system(buf);
 
+		// tar 파일 삭제
+		unlink(backup_filepath);
+
+		// 원래 작업디렉토리로 복구
+		chdir(cwd);
+
 		// 로깅
 		sprintf(buf, "\ttotalSize %ld\n\t%s", statbuf.st_size, fname);
 		log_rsync(argc, argv, buf);
-
-		// tar 파일 삭제
-		unlink(backup_filepath);
 	}
 	else {
 		sprintf(backup_filepath, "%sXXXXXX", src);
@@ -290,7 +327,7 @@ int sync_file(int argc, char *argv[], const char *src, const char *dest, int top
 			exit(1);
 		}
 
-		sprintf(buf, "\t%s %ldbytes", src, statbuf.st_size);
+		sprintf(buf, "\t%s %ldbytes", fname, statbuf.st_size);
 		log_rsync(argc, argv, buf);
 	}
 
