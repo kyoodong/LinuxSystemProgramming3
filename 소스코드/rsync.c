@@ -677,13 +677,9 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		// 동일한 파일 존재 시
 		if (is_same_file(buf, buf2)) {
 			// 디렉토리는 같은 파일이라 판명되었지만 하위 파일들이 다를 수 있음
-			/*
 			if (toption) {
-				prev = sync_dir(argc, argv, buf, buf2, roption, toption, moption, depth + 1);
-				if (prev != NULL)
-					insert_node(&t_list, prev);
+				sync_dir(argc, argv, buf, buf2, roption, toption, moption, depth + 1);
 			}
-			*/
 
 			// dst_list 에서 src 노드를 삭제
 			// 추후 moption에서 남은 dst_list 파일들을 삭제함
@@ -703,9 +699,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 		// 디렉토리 동기화
 		if (S_ISDIR(tmp->stat.st_mode)) {
-			// toption 아닐 때는 디렉토리를 직접 복사 
-			if (!toption) 
-				sync_dir(argc, argv, buf, buf2, roption, toption, moption, depth + 1);
+			sync_dir(argc, argv, buf, buf2, roption, toption, moption, depth + 1);
 		}
 
 		// 일반 파일
@@ -728,19 +722,19 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		prev = tmp;
 		tmp = tmp->next;
 
-		if (toption) {
-			char *cp = buf + strlen(buf) - 1;
+		char *cp = buf + strlen(buf) - 1;
 
-			// tar 로 묶을때는 절대경로로 필요하기 때문에 수정
-			for (int i = -1; i <= depth;) {
-				if (*cp == '/')
-					i++;
-				cp--;
-			}
-			strcpy(prev->fname, cp + 2);
+		// tar 로 묶을때는 절대경로로 필요하기 때문에 수정
+		for (int i = 0; i <= depth + 1;) {
+			if (*cp == '/')
+				i++;
+			cp--;
 		}
+		strcpy(prev->fname, cp + 2);
 
-		insert_node(&glob_sync_list, prev);
+		// 일반 파일만 sync 리스트에 넣음
+		if (!S_ISDIR(prev->stat.st_mode))
+			insert_node(&glob_sync_list, prev);
 	}
 
 	// 대상 디렉토리의 파일 중에서 소스 디렉토리의 파일에 없었던 파일들을 순회
@@ -854,7 +848,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 			// 삭제되는 파일들 목록
 			while (tmp != NULL) {
-				cp += sprintf(cp, "\t%s delete\n", tmp->fname);
+				cp += sprintf(cp, "\t%s delete\n", strchr(tmp->fname, '/') + 1);
 
 				prev = tmp;
 				tmp = tmp->next;
@@ -872,7 +866,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 			// 동기화 해야하는 파일들 다 tar로 묶음
 			while (tmp != NULL) {
-				cp += sprintf(cp, "\t%s %ldbytes\n", tmp->fname, tmp->stat.st_size);
+				cp += sprintf(cp, "\t%s %ldbytes\n", strchr(tmp->fname, '/') + 1, tmp->stat.st_size);
 				prev = tmp;
 				tmp = tmp->next;
 				remove_node(prev);
@@ -882,7 +876,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 			// 동기화 해야하는 파일들 다 tar로 묶음
 			while (tmp != NULL) {
-				cp += sprintf(cp, "\t%s delete\n", tmp->fname);
+				cp += sprintf(cp, "\t%s delete\n", strchr(tmp->fname, '/') + 1);
 
 				prev = tmp;
 				tmp = tmp->next;
