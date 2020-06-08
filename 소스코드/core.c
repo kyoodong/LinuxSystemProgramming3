@@ -209,7 +209,7 @@ static token __comma(int n) {
 	if (t2.type == OP && t2.value == ',') {
 		__next_token();
 		__expr(n);
-		return __get_token();
+		return t;
 	}
 	return t;
 }
@@ -260,6 +260,8 @@ static token __minus(int n, int table[60]) {
 
 		for (int i = t.value; i <= t3.value; i++)
 			table[i] = 1;
+
+		t3.type = RANGE;
 		return t3;
 	}
 	
@@ -312,13 +314,21 @@ static token __slash(int n, int table[60]) {
 			return t;
 		}
 
+		int count = 0;
 		for (int i = 0; i < 60; i++) {
-			if (i % t3.value == 0 && table[i]) {
-				table[i] = 0;
+			if (table[i]) {
+				if (count <= 0) {
+					count = t3.value - 1;
+				} else {
+					table[i] = 0;
+					count--;
+				}
 			}
 		}
 		return t3;
 	}
+
+	table[t.value] = 1;
 	return t;
 }
 
@@ -336,9 +346,22 @@ static int __expr(int n) {
 		return -1;
 	}
 
+	/*
+	for (int i = 0; i < 60; i++) {
+		if (table[i])
+			printf("%d ", i);
+	}
+	printf("\n");
+	*/
+
+	if (n >= 0 && table[n] > 0) {
+		result = 1;
+		return 1;
+	}
+
 	if (strlen(extermp) > 0)
 		return -1;
-	return table[n];
+	return 0;
 }
 
 // 1-15/2,16-30/3
@@ -348,6 +371,5 @@ int parse_execute_term(const char *str, int n) {
 	result = 0;
 	extermp = exterm;
 	int ret = __expr(n);
-	printf("%d\n", ret);
 	return ret;
 }
