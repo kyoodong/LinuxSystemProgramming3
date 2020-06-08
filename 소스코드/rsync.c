@@ -406,7 +406,7 @@ void onexit() {
   SIGINT 캐치함수
   */
 void on_sigint(int sig) {
-	onexit();
+	//onexit();
 	exit(0);
 }
 
@@ -849,6 +849,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		// 일반 파일
 		else {
 			// toption 아닐때는 파일을 직접 복사
+			// toption 일때는 한 번에 tar 로 묶어서 복사
 			if (!toption)
 				copy_file(buf, buf2);
 		}
@@ -1047,6 +1048,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 				tmp = tmp->next;
 				remove_node(prev);
 			}
+
 			buf[strlen(buf) - 1] = 0;
 			log_rsync(argc, argv, buf);
 		}
