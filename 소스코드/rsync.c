@@ -802,7 +802,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		// 동일한 파일 존재 시
 		if (is_same_file(buf, buf2)) {
 			// 디렉토리는 같은 파일이라 판명되었지만 하위 파일들이 다를 수 있음
-			if (roption) {
+			if (roption && S_ISDIR(tmp->stat.st_mode)) {
 				sync_dir(argc, argv, buf, buf2, roption, toption, moption, depth + 1);
 			}
 
@@ -826,14 +826,23 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		if (S_ISDIR(tmp->stat.st_mode)) {
 			if (roption)
 				sync_dir(argc, argv, buf, buf2, roption, toption, moption, depth + 1);
+
 			else {
-				if (access(buf2, F_OK) != 0) {
+				struct dirent **dirp;
+				int c = scandir(buf, &dirp, NULL, NULL);
+
+				if (c == 2) {
+					if (access(buf2, F_OK) == 0)
+						remove(buf2);
+
 					copy_dir(buf, buf2, roption);
+					tmp->stat.st_size = 0;
+					allow_insert = 1;
 				}
 
-				tmp->stat.st_size = 0;
-				allow_insert = 1;
-				printf("%s is allowed\n", tmp->fname);
+				for (int i = 0; i < c; i++)
+					free(dirp[i]);
+				free(dirp);
 			}
 		}
 
