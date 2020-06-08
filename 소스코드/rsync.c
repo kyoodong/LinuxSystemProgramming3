@@ -194,8 +194,9 @@ void insert_node(node *head, node *elem) {
 	elem->next = head->next;
 	elem->prev = head;
 
-	if (head->next != NULL)
+	if (head->next != NULL) {
 		head->next->prev = elem;
+	}
 	head->next = elem;
 }
 
@@ -497,7 +498,7 @@ void copy_file(const char *src, const char *dest) {
 	close(fd);
 }
 
-void copy_dir(const char *src, const char *dest) {
+void copy_dir(const char *src, const char *dest, int roption) {
 	struct dirent **dirp;
 	int count;
 	struct stat statbuf;
@@ -505,6 +506,7 @@ void copy_dir(const char *src, const char *dest) {
 	char buf2[BUF_SIZE];
 	int fd1, fd2;
 	size_t length;
+	struct utimbuf utimbuf;
 
 	if (stat(src, &statbuf) < 0) {
 		fprintf(stderr, "stat error for %s\n", src);
@@ -512,6 +514,17 @@ void copy_dir(const char *src, const char *dest) {
 	}
 
 	mkdir(dest, statbuf.st_mode);
+
+	// 원본 파일과 수정 시간을 맞춤
+	utimbuf.actime = statbuf.st_atime;
+	utimbuf.modtime = statbuf.st_mtime;
+	if (utime(dest, &utimbuf) < 0) {
+		fprintf(stderr, "utime error\n");
+		exit(1);
+	}
+
+	if (!roption)
+		return;
 	
 	if ((count = scandir(src, &dirp, NULL, NULL)) < 0) {
 		fprintf(stderr, "scandir error for %s\n", src);
@@ -531,7 +544,7 @@ void copy_dir(const char *src, const char *dest) {
 
 		// 디렉토리
 		if (S_ISDIR(statbuf.st_mode)) {
-			copy_dir(buf, buf2);
+			copy_dir(buf, buf2, roption);
 		}
 		// 일반 파일
 		else {
@@ -606,6 +619,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 	int count;
 	struct stat statbuf;
 	node *prev;
+	int allow_insert = 0;
 
 	src_list.next = NULL;
 	src_list.prev = NULL;
@@ -650,7 +664,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 			already_exist = 1;
 			// dest 디렉토리 백업
 			sprintf(backup_filepath, "%s.bak", dest);
-			copy_dir(dest, backup_filepath);
+			copy_dir(dest, backup_filepath, 1);
 		} else {
 			already_exist = 0;
 			strcpy(backup_filepath, dest);
@@ -674,7 +688,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 				exit(1);
 			}
 
-			mkdir(dest, statbuf.st_mode);
+			copy_dir(src, dest, 0);
 		}
 		else {
 			if (stat(dest, &statbuf) < 0) {
@@ -717,10 +731,6 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		}
 
 		if (S_ISDIR(statbuf.st_mode)) {
-			// roption 꺼져있으면 디렉토리는 제낌
-			if (!roption)
-				continue;
-
 			// 디렉토리는 write, execute 권한 추가 검사
 			if (access(buf, W_OK) != 0 || access(buf, X_OK) != 0) {
 				fprintf(stderr, USAGE);
@@ -757,11 +767,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 			exit(1);
 		}
 
-		// roption 꺼져있으면 디렉토리는 제낌
 		if (S_ISDIR(statbuf.st_mode)) {
-			if (!roption)
-				continue;
-
 			// 디렉토리는 write, execute 권한 추가 검사
 			if (access(buf, W_OK) != 0 || access(buf, X_OK) != 0) {
 				fprintf(stderr, USAGE);
@@ -796,7 +802,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		// 동일한 파일 존재 시
 		if (is_same_file(buf, buf2)) {
 			// 디렉토리는 같은 파일이라 판명되었지만 하위 파일들이 다를 수 있음
-			if (toption) {
+			if (roption) {
 				sync_dir(argc, argv, buf, buf2, roption, toption, moption, depth + 1);
 			}
 
@@ -818,7 +824,17 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 		// 디렉토리 동기화
 		if (S_ISDIR(tmp->stat.st_mode)) {
-			sync_dir(argc, argv, buf, buf2, roption, toption, moption, depth + 1);
+			if (roption)
+				sync_dir(argc, argv, buf, buf2, roption, toption, moption, depth + 1);
+			else {
+				if (access(buf2, F_OK) != 0) {
+					copy_dir(buf, buf2, roption);
+				}
+
+				tmp->stat.st_size = 0;
+				allow_insert = 1;
+				printf("%s is allowed\n", tmp->fname);
+			}
 		}
 
 		// 일반 파일
@@ -852,8 +868,13 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		strcpy(prev->fname, cp + 2);
 
 		// 일반 파일만 sync 리스트에 넣음
-		if (!S_ISDIR(prev->stat.st_mode))
+		if (!S_ISDIR(prev->stat.st_mode) || allow_insert) {
 			insert_node(&glob_sync_list, prev);
+			
+			if (tmp != NULL) {
+				tmp->prev = NULL;
+			}
+		}
 	}
 
 	// 대상 디렉토리의 파일 중에서 소스 디렉토리의 파일에 없었던 파일들을 순회
@@ -886,6 +907,9 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 			// 삭제 리스트 추가 (로깅용)
 			insert_node(&glob_delete_list, prev);
+			if (tmp != NULL) {
+				tmp->prev = NULL;
+			}
 			continue;
 		}
 		prev = tmp;
@@ -1000,7 +1024,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 				cp += sprintf(cp, "\t%s %ldbytes\n", strchr(tmp->fname, '/') + 1, tmp->stat.st_size);
 				prev = tmp;
 				tmp = tmp->next;
-				remove_node(prev);
+				//remove_node(prev);
 			}
 
 			// 삭제 파일 리스트
@@ -1023,6 +1047,16 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 		backup_filepath[0] = 0;
 	}
+
+	if (stat(src, &statbuf) < 0) {
+		fprintf(stderr, "stat error for %s\n", src);
+		exit(1);
+	}
+
+	struct utimbuf utimbuf;
+	utimbuf.actime = statbuf.st_atime;
+	utimbuf.modtime = statbuf.st_mtime;
+	utime(dest, &utimbuf);
 }
 
 /**
