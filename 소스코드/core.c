@@ -169,15 +169,20 @@ int log_crontab(const char *str) {
 	struct tm *tm;
 	time_t t;
 	FILE *fp;
+	int fd;
 
 	if ((fp = fopen(CRONTAB_LOG, "a+")) == NULL) {
 		sprintf(err_str, "fopen error for %s\n", CRONTAB_LOG);
 		return -1;
 	}
+	fd = fileno(fp);
+	lock_file(fd);
 
 	t = time(NULL);
 	tm = localtime(&t);
 	fprintf(fp, "[%s] %s", strtok(asctime(tm), "\n"), str);
+
+	unlock_file(fd);
 	fclose(fp);
 	return 0;
 }
