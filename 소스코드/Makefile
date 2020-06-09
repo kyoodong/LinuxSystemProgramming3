@@ -1,8 +1,8 @@
 compile: clear core crontab crond rsync
 debug: clear
 	rm -f a.out
-#gcc crontab.c core.c -g
-	gcc rsync.c core.c -g
+	gcc crontab.c core.c -g
+#gcc rsync.c core.c -g
 	gdb ./a.out
 
 crontab:

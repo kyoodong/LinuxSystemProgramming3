@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+#include <syslog.h>
+#include <signal.h>
+#include <fcntl.h>
 #include "core.h"
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -9,6 +12,7 @@
 void init_daemon();
 void print_log(const char *str);
 int process_crontab();
+void test(crontab *ct, int min, int hour, int day, int month, int dayofweek);
 
 crontab head;
 struct stat cronstat;
@@ -43,9 +47,9 @@ int daemon_main() {
 		}
 
 		t = time(NULL);
-		tm = gmtime(&t);
+		tm = localtime(&t);
 
-		printf("min = %d  hour = %d  day = %d  dayofweek = %d  month = %d\n", tm->tm_min, tm->tm_hour, tm->tm_mday, tm->tm_wday, tm->tm_mon + 1);
+		//printf("min = %d  hour = %d  day = %d  dayofweek = %d  month = %d\n", tm->tm_min, tm->tm_hour, tm->tm_mday, tm->tm_wday, tm->tm_mon + 1);
 
 		process_crontab();
 		sleep(60);
@@ -63,8 +67,8 @@ int process_crontab() {
 	char buf[BUFSIZ];
 	
 	ct = head.next;
+	//printf("NOW min = %d  hour = %d  day = %d  dayofweek = %d  month = %d\n", tm->tm_min, tm->tm_hour, tm->tm_mday, tm->tm_wday, tm->tm_mon);
 	while (ct != NULL) {
-		printf("[ct] min = %s  hour = %s  day = %s  dayofweek = %s  month = %s  op = %s\n", ct->min, ct->hour, ct->day, ct->dayofweek, ct->month, ct->op);
 		if (parse_execute_term(ct->min, tm->tm_min) &&
 			parse_execute_term(ct->hour, tm->tm_hour) &&
 			parse_execute_term(ct->day, tm->tm_mday) &&
@@ -80,17 +84,68 @@ int process_crontab() {
 		}
 		ct = ct->next;
 	}
+
+	/*
+	int dayofweek = 0;
+	for (int month = 1; month <= 12; month++) {
+		for (int day = 1; day <= 31; day++) {
+			printf("\n%d월 %d일 %d시 %d분 %d요일\n", month, day, 0, 0, dayofweek);
+
+			ct = head.next;
+			while (ct != NULL) {
+				test(ct, 0, 0, day, month, dayofweek);
+				ct = ct->next;
+			}
+			dayofweek++;
+			if (dayofweek == 7)
+				dayofweek = 0;
+		}
+	}
+
+	for (int month = 2; month <= 12; month++) {
+			for (int day = 24; day <= 31; day++) {
+				for (int hour = 0; hour < 24; hour++) {
+					for (int min = 0; min < 60; min++) {
+						ct = head.next;
+						printf("%d월 %d일 %d시 %d분\n", month, day, hour, min);
+	
+						while (ct != NULL) {
+							test(ct, min, hour, day, month, dayofweek);
+							ct = ct->next;
+						}
+					printf("\n");
+					}
+			}
+			sleep(1);
+		}
+	}
+	*/
+}
+
+void test(crontab *ct, int min, int hour, int day, int month, int dayofweek) {
+	char buf[BUFSIZ];
+	if (parse_execute_term(ct->min, min) &&
+		parse_execute_term(ct->hour, hour) &&
+		parse_execute_term(ct->day, day) &&
+		parse_execute_term(ct->month, month) &&
+		parse_execute_term(ct->dayofweek, dayofweek)) {
+			sprintf(buf, "%s &", ct->op);
+			system(ct->op);
+	
+			sprintf(buf, "run %s %s %s %s %s %s\n", ct->min, ct->hour, ct->day, ct->dayofweek, ct->month, ct->op);
+			log_crontab(buf);
+	}
 }
 
 void print_log(const char *str) {
-	fputs(str, stderr);
+	//fputs(str, stderr);
+	syslog(LOG_INFO, "%s", str);
 }
 
 /**
 	프로세스를 daemon 프로세스로 만드는 함수
 	*/
 void init_daemon() {
-	/* TODO 디버깅용
 	pid_t pid;
 	int fd, maxfd;
 
@@ -108,9 +163,7 @@ void init_daemon() {
 		close(fd);
 
 	umask(0);
-	chdir("/");
 	fd = open("/dev/null", O_RDWR);
 	dup(0);
 	dup(0);
-	*/
 }
