@@ -35,6 +35,8 @@ int remove_crontab(crontab *cp);
 int is_empty_crontab(crontab *head);
 int log_crontab(const char *str);
 int parse_execute_term(const char *exterm, int n);
+int lock_file(int fd);
+int unlock_file(int fd);
 static int __expr(int n);
 
 #endif

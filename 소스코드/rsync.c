@@ -30,8 +30,6 @@ void onexit();
 void on_sigint(int sig);
 int sync_file(int argc, char *argv[], char *src, const char *dest, int toption);
 void sync_dir(int argc, char *argv[], const char *src, const char *dest, int roption, int toption, int moption, int depth);
-void lock_file(int fd, int length);
-void unlock_file(int fd);
 void log_rsync(int argc, char *argv[], const char *str);
 void copy_file(const char *src, const char *dest);
 void remove_dir(const char *dirpath);
@@ -264,7 +262,6 @@ int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) 
 	char buf[BUFSIZ];
 	char cwd[BUF_SIZE];
 	char path[BUF_SIZE];
-	ssize_t length;
 	struct stat statbuf;
 	struct utimbuf utimbuf;
 	char *fname;
@@ -300,14 +297,8 @@ int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) 
 		exit(1);
 	}
 
-	length = lseek(srcfd, 0, SEEK_END);
-	if (length < 0 || lseek(srcfd, 0, SEEK_SET) < 0) {
-		fprintf(stderr, "lseek error for %s\n", src);
-		exit(1);
-	}
-
 	// 파일 잠금
-	lock_file(srcfd, length);
+	lock_file(srcfd);
 
 	// toption
 	if (toption) {
@@ -1068,41 +1059,6 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 	utimbuf.actime = statbuf.st_atime;
 	utimbuf.modtime = statbuf.st_mtime;
 	utime(dest, &utimbuf);
-}
-
-/**
-  파일을 잠그는 함수
-  @param fd 파일 디스크립터
-  @param length 파일 크기
-  */
-void lock_file(int fd, int length) {
-	struct flock lock;
-
-	// 파일 잠금
-	lock.l_type = F_WRLCK;
-	lock.l_whence = SEEK_SET;
-	lock.l_start = 0;
-	lock.l_len = length;
-	lock.l_pid = getpid();
-
-	fcntl(fd, F_SETLK, &lock);
-}
-
-/**
-  파일을 잠그는 함수
-  @param fd 파일 디스크립터
-  */
-void unlock_file(int fd) {
-	struct flock lock;
-
-	// 파일 잠금
-	lock.l_type = F_UNLCK;
-	lock.l_whence = SEEK_SET;
-	lock.l_start = 0;
-	lock.l_len = 0;
-	lock.l_pid = getpid();
-
-	fcntl(fd, F_SETLK, &lock);
 }
 
 /**

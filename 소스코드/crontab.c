@@ -176,11 +176,16 @@ int parse_input(char *input) {
 int process_add(crontab *cp) {
 	FILE *fp;
 	char buf[BUFSIZ];
+	int fd;
 
 	if ((fp = fopen(CRONTAB_FILE, "a+")) == NULL) {
 		fprintf(stderr, "fopen error for %s\n", CRONTAB_FILE);
 		return -1;
 	}
+
+	// 파일 lock
+	fd = fileno(fp);
+	lock_file(fd);
 
 	if (add_crontab(&head, cp) < 0) {
 		fprintf(stderr, "add_crontab error\n");
@@ -189,6 +194,9 @@ int process_add(crontab *cp) {
 	}
 
 	fprintf(fp, "%s %s %s %s %s %s\n", cp->min, cp->hour, cp->day, cp->month, cp->dayofweek, cp->op);
+
+	// 파일 unlock
+	unlock_file(fd);
 	fclose(fp);
 
 	sprintf(buf, "add %s %s %s %s %s %s\n", cp->min, cp->hour, cp->day, cp->month, cp->dayofweek, cp->op);
@@ -205,6 +213,7 @@ int process_remove(int num) {
 	crontab *tmp;
 	crontab *cpy;
 	FILE *fp;
+	int fd;
 	char buf[BUFSIZ];
 
 	tmp = &head;
@@ -240,12 +249,16 @@ int process_remove(int num) {
 		return -1;
 	}
 
+	fd = fileno(fp);
+	lock_file(fd);
+
 	tmp = head.next;
 	while (tmp != NULL) {
 		fprintf(fp, "%s %s %s %s %s %s\n", tmp->min, tmp->hour, tmp->day, tmp->month, tmp->dayofweek, tmp->op);
 		tmp = tmp->next;
 	}
 
+	unlock_file(fd);
 	fclose(fp);
 
 	sprintf(buf, "remove %s %s %s %s %s %s\n", cpy->min, cpy->hour, cpy->day, cpy->month, cpy->dayofweek, cpy->op);
