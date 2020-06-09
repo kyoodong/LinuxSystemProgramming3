@@ -4,7 +4,6 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
-#include <fcntl.h>
 #include "core.h"
 
 char exterm[BUFSIZ];
@@ -19,7 +18,6 @@ int result = 0;
   */
 int read_crontab_file(crontab *head) {
 	FILE *fp;
-	int fd;
 	crontab *node, *tail;
 
 	if (head == NULL) {
@@ -33,9 +31,6 @@ int read_crontab_file(crontab *head) {
 		sprintf(err_str, "[read_crontab_file] %s fopen error\n", CRONTAB_FILE);
 		return -1;
 	}
-
-	fd = fileno(fp);
-	lock_file(fd);
 
 	while (!feof(fp)) {
 		node = calloc(1, sizeof(crontab));
@@ -53,36 +48,8 @@ int read_crontab_file(crontab *head) {
 		tail = node;
 	}
 
-	unlock_file(fd);
 	return 0;
 }
-
-/**
-  파일에 lock을 거는 함수
-  @param fd 파일 디스크립터
-  */
-int lock_file(int fd) {
-	struct flock lock;
-	lock.l_type = F_WRLCK;
-	lock.l_start = 0;
-	lock.l_whence = SEEK_SET;
-	lock.l_len = 0;
-	return fcntl(fd, F_SETLKW, &lock);
-}
-
-/**
-  파일의 lock 을 해제하는 함수
-  @param fd 파일 디스크립터
-  */
-int unlock_file(int fd) {
-	struct flock lock;
-	lock.l_type = F_UNLCK;
-	lock.l_start = 0;
-	lock.l_whence = SEEK_SET;
-	lock.l_len = 0;
-	return fcntl(fd, F_SETLK, &lock);
-}
-
 
 /**
   crontab 노드를 리스트에 추가하는 함수
@@ -169,20 +136,16 @@ int log_crontab(const char *str) {
 	struct tm *tm;
 	time_t t;
 	FILE *fp;
-	int fd;
 
 	if ((fp = fopen(CRONTAB_LOG, "a+")) == NULL) {
 		sprintf(err_str, "fopen error for %s\n", CRONTAB_LOG);
 		return -1;
 	}
-	fd = fileno(fp);
-	lock_file(fd);
 
 	t = time(NULL);
 	tm = localtime(&t);
 	fprintf(fp, "[%s] %s", strtok(asctime(tm), "\n"), str);
 
-	unlock_file(fd);
 	fclose(fp);
 	return 0;
 }

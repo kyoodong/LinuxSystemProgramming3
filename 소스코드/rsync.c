@@ -297,9 +297,6 @@ int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) 
 		exit(1);
 	}
 
-	// 파일 잠금
-	lock_file(srcfd);
-
 	// toption
 	if (toption) {
 		// 해당 디렉토리로 chdir. tar 할 때 디렉토리경로까지 묶이는 문제를 해결하기 위함
@@ -344,7 +341,6 @@ int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) 
 		// 임시 파일을 dest 로 바꿔치기
 		if (rename(backup_filepath, buf) < 0) {
 			fprintf(stderr, "rename error for %s to %s\n", backup_filepath, dest);
-			unlock_file(srcfd);
 			exit(1);
 		}
 
@@ -354,7 +350,6 @@ int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) 
 
 
 	// 성공적 종료
-	unlock_file(srcfd);
 	close(srcfd);
 	backup_filepath[0] = '\0';
 	return 0;
@@ -420,7 +415,6 @@ void copy_file(const char *src, const char *dest) {
 
 	if (stat(src, &statbuf) < 0) {
 		fprintf(stderr, "stat error for %s\n", src);
-		unlock_file(srcfd);
 		exit(1);
 	}
 
@@ -472,7 +466,6 @@ void copy_file(const char *src, const char *dest) {
 	utimbuf.modtime = statbuf.st_mtime;
 	if (utime(dest, &utimbuf) < 0) {
 		fprintf(stderr, "utime error\n");
-		unlock_file(srcfd);
 		exit(1);
 	}
 
