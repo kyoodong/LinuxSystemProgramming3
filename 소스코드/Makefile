@@ -9,7 +9,7 @@ crontab:
 	gcc crontab.c -o ssu_crontab core.o
 
 crond:
-	gcc daemon.c -o ssu_crond core.o
+	gcc daemon.c -o ssu_crond core.o -lpthread
 
 rsync: clear
 	gcc rsync.c -o ssu_rsync core.o

@@ -189,6 +189,7 @@ int process_add(crontab *cp) {
 	}
 
 	fprintf(fp, "%s %s %s %s %s %s\n", cp->min, cp->hour, cp->day, cp->month, cp->dayofweek, cp->op);
+
 	fclose(fp);
 
 	sprintf(buf, "add %s %s %s %s %s %s\n", cp->min, cp->hour, cp->day, cp->month, cp->dayofweek, cp->op);

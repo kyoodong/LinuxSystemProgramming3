@@ -6,12 +6,13 @@
 #include <signal.h>
 #include <fcntl.h>
 #include "core.h"
+#include <pthread.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
 void init_daemon();
 void print_log(const char *str);
-int process_crontab();
+void *process_crontab();
 void test(crontab *ct, int min, int hour, int day, int month, int dayofweek);
 
 crontab head;
@@ -20,54 +21,70 @@ struct tm *tm;
 time_t t;
 
 int daemon_main() {
-	struct stat statbuf;
+	pthread_t thread;
+	int thread_id;
 
-	if (read_crontab_file(&head) < 0 || stat(CRONTAB_FILE, &cronstat) < 0) {
-		print_log("read_crontab_file error\n");
-		exit(1);
+	// 파일 생성되기를 대기
+	while (read_crontab_file(&head) < 0 || stat(CRONTAB_FILE, &cronstat) < 0) {
+		print_log("Cannot open crontab file\n");
+		sleep(5);
 	}
 
 	while (1) {
-		if (stat(CRONTAB_FILE, &statbuf) < 0)
-			continue;
-
-		// crontab 파일이 변경되었음이 감지된 경우
-		if (statbuf.st_mtime != cronstat.st_mtime) {
-			// crontab 리스트를 비움
-			while (!is_empty_crontab(&head))
-				remove_crontab(head.next);
-
-			// crontab 파일을 다시 읽어서 리스트 재구성
-			if (read_crontab_file(&head)) {
-				print_log("read_crontab_file error\n");
-				exit(1);
-			}
-
-			cronstat = statbuf;
+		// 스레드 생성
+		thread_id = pthread_create(&thread, NULL, process_crontab, (void *) 0);
+		if (thread_id < 0) {
+			print_log("Creating thread error\n");
+			exit(1);
 		}
 
-		t = time(NULL);
-		tm = localtime(&t);
-
-		//printf("min = %d  hour = %d  day = %d  dayofweek = %d  month = %d\n", tm->tm_min, tm->tm_hour, tm->tm_mday, tm->tm_wday, tm->tm_mon + 1);
-
-		process_crontab();
+		// 스레드 종료시 자원을 반환하도록 설정
+		pthread_detach(thread);
+	
 		sleep(60);
 	}
 }
 
 int main(int argc, char *argv[]) {
-	init_daemon();
+	//init_daemon();
 	daemon_main();
 	exit(0);
 }
 
-int process_crontab() {
+/**
+  crontab 데이터를 읽고 처리하는 함수 (스레드 실행)
+  파일을 읽고, 모든 명령어를 처리하는 것이 오래걸릴 수 있으므로 스레드로 분리
+  60초 주기로 실행되는 로직 상 이 주기에 대한 오차를 줄일 수 있음
+  예를 들면 파일을 읽고 모든 명령어를 처리하는데 2초가 걸린다면
+  실제로는 62초 주기로 실행되므로 2초가 누적되다보면 문제가 생김
+  */
+void *process_crontab() {
+	struct stat statbuf;
 	crontab *ct;
 	char buf[BUFSIZ];
+
+	if (stat(CRONTAB_FILE, &statbuf) < 0)
+		pthread_exit(NULL);
+
+	// crontab 파일이 변경되었음이 감지된 경우
+	if (statbuf.st_mtime != cronstat.st_mtime) {
+		// crontab 리스트를 비움
+		while (!is_empty_crontab(&head))
+			remove_crontab(head.next);
+
+		// crontab 파일을 다시 읽어서 리스트 재구성
+		if (read_crontab_file(&head)) {
+			print_log("read_crontab_file error\n");
+			pthread_exit(NULL);
+		}
+
+		cronstat = statbuf;
+	}
+
+	t = time(NULL);
+	tm = localtime(&t);
 	
 	ct = head.next;
-	//printf("NOW min = %d  hour = %d  day = %d  dayofweek = %d  month = %d\n", tm->tm_min, tm->tm_hour, tm->tm_mday, tm->tm_wday, tm->tm_mon);
 	while (ct != NULL) {
 		if (parse_execute_term(ct->min, tm->tm_min) &&
 			parse_execute_term(ct->hour, tm->tm_hour) &&
@@ -84,42 +101,7 @@ int process_crontab() {
 		}
 		ct = ct->next;
 	}
-
-	/*
-	int dayofweek = 0;
-	for (int month = 1; month <= 12; month++) {
-		for (int day = 1; day <= 31; day++) {
-			printf("\n%d월 %d일 %d시 %d분 %d요일\n", month, day, 0, 0, dayofweek);
-
-			ct = head.next;
-			while (ct != NULL) {
-				test(ct, 0, 0, day, month, dayofweek);
-				ct = ct->next;
-			}
-			dayofweek++;
-			if (dayofweek == 7)
-				dayofweek = 0;
-		}
-	}
-
-	for (int month = 2; month <= 12; month++) {
-			for (int day = 24; day <= 31; day++) {
-				for (int hour = 0; hour < 24; hour++) {
-					for (int min = 0; min < 60; min++) {
-						ct = head.next;
-						printf("%d월 %d일 %d시 %d분\n", month, day, hour, min);
-	
-						while (ct != NULL) {
-							test(ct, min, hour, day, month, dayofweek);
-							ct = ct->next;
-						}
-					printf("\n");
-					}
-			}
-			sleep(1);
-		}
-	}
-	*/
+	return NULL;
 }
 
 void test(crontab *ct, int min, int hour, int day, int month, int dayofweek) {

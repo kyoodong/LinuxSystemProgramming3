@@ -145,6 +145,7 @@ int log_crontab(const char *str) {
 	t = time(NULL);
 	tm = localtime(&t);
 	fprintf(fp, "[%s] %s", strtok(asctime(tm), "\n"), str);
+
 	fclose(fp);
 	return 0;
 }
@@ -314,7 +315,7 @@ static token __slash(int n, int table[60]) {
 			return t;
 		}
 
-		int count = 0;
+		int count = t3.value - 1;
 		for (int i = 0; i < 60; i++) {
 			if (table[i]) {
 				if (count <= 0) {
