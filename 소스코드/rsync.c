@@ -287,19 +287,16 @@ int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) 
 		}
 	}
 
-	// 같은 파일이 이미 존재
-	if (is_same_file(src, dest)) {
-		return 0;
-	}
-
 	fname = strrchr(src, '/');
 	*fname = 0;
 	strcpy(path, src);
 	*fname++ = '/';
 
 	sprintf(buf, "%s/%s", dest, fname);
-	if (is_same_file(src, buf))
-		return -1;
+	if (is_same_file(src, buf)) {
+		log_rsync(argc, argv, "");
+		return 0;
+	}
 	
 	// src 파일 열기
 	if ((srcfd = open(src, O_RDONLY)) < 0) {
