@@ -76,7 +76,7 @@ int validation_check(const char *term) {
 /**
   입력 파싱하는 함수
   @param input 입력 문자열
-  @return
+  @return 성공 시 0 에러 시 -1
   */
 int parse_input(char *input) {
 	char *p;

@@ -214,6 +214,9 @@ void remove_node(node *elem) {
 	free(elem);
 }
 
+/**
+ 빈 리스트인지 확인해주는 함수
+ */
 int is_empty_list(node *head) {
 	return head->next == NULL;
 }
@@ -482,6 +485,12 @@ void copy_file(const char *src, const char *dest) {
 	close(fd);
 }
 
+/**
+ 디렉토리를 복사해주는 함수
+ @param src 복사할 디렉토리 경로
+ @param dest 새로운 디렉토리 경로
+ @param roption -r 옵션 여부. 1이면 서브디렉토리까지 복사, 0이면 서브디렉토리는 복사하지 않음
+ */
 void copy_dir(const char *src, const char *dest, int roption) {
 	struct dirent **dirp;
 	int count;
@@ -541,6 +550,10 @@ void copy_dir(const char *src, const char *dest, int roption) {
 	free(dirp);
 }
 
+/**
+ 디렉토리를 삭제하는 함수
+ @param dirpath 삭제할 디렉토리의 경로
+ */
 void remove_dir(const char *dirpath) {
 	struct dirent **dirp;
 	int count;
@@ -580,6 +593,12 @@ void remove_dir(const char *dirpath) {
 	free(dirp);
 }
 
+/**
+ src 기준의 상대 경로를 알아내주는 함수
+ @param path 절대경로 문자열
+ @param depth -r 옵션으로 서브 디렉토리까지 탐색할 때 해당 서브디렉토리의 depth
+ @return src 기준의 상대 경로
+ */
 const char *get_path(const char *path, int depth) {
 	const char *cp = path + strlen(path) - 1;
 
@@ -593,6 +612,17 @@ const char *get_path(const char *path, int depth) {
 	return cp + 2;
 }
 
+/**
+ 디렉토리를 동기화 시켜주는 함수
+ @param argc 프로그램 인자 수
+ @param argv 프로그램 인자 벡터
+ @param src 입력 파일 경로
+ @param dest 대상 파일 경로
+ @param roption -r 옵션 여부
+ @param toption -t 옵션 여부
+ @param moption -m 옵션 여부
+ @param depth 서브 디렉토리 동기화 시 필요한 재귀호출에 대비
+*/
 void sync_dir(int argc, char *argv[], const char *src, const char *dest, int roption, int toption, int moption, int depth) {
 	const char *fname;
 	char buf[BUFSIZ];

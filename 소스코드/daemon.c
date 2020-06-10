@@ -20,7 +20,10 @@ struct stat cronstat;
 struct tm *tm;
 time_t t;
 
-int daemon_main() {
+/**
+ daemon 프로세스가 된 이후의 main 역할을 하는 함수
+ */
+void daemon_main() {
 	pthread_t thread;
 	int thread_id;
 
@@ -104,6 +107,7 @@ void *process_crontab() {
 	return NULL;
 }
 
+// 디버깅용
 void test(crontab *ct, int min, int hour, int day, int month, int dayofweek) {
 	char buf[BUFSIZ];
 	if (parse_execute_term(ct->min, min) &&
@@ -119,6 +123,10 @@ void test(crontab *ct, int min, int hour, int day, int month, int dayofweek) {
 	}
 }
 
+/**
+ 로그 찍어주는 함수
+ @param str 로그에 출력할 문자열
+ */
 void print_log(const char *str) {
 	//fputs(str, stderr);
 	syslog(LOG_INFO, "%s", str);
