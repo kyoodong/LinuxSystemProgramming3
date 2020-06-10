@@ -334,7 +334,7 @@ int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) 
 		chdir(cwd);
 
 		// 로깅
-		sprintf(buf, "\ttotalSize %ld\n\t%s", statbuf.st_size, fname);
+		sprintf(buf, "\ttotalSize %ldbytes\n\t%s", statbuf.st_size, fname);
 		log_rsync(argc, argv, buf);
 	}
 	else {
