@@ -181,8 +181,8 @@ int is_same_node(node *lhs, node *rhs) {
 	if (strcmp(lhs->fname, rhs->fname))
 		return 0;
 
-	if (lhs->stat.st_size != rhs->stat.st_size || lhs->stat.st_mtime != rhs->stat.st_mtime)
-		return 0;
+	//if (lhs->stat.st_size != rhs->stat.st_size || lhs->stat.st_mtime != rhs->stat.st_mtime)
+	//	return 0;
 
 	return 1;
 }
