@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <memory.h>
+#include <sys/time.h>
 #include "core.h"
 
 int print_prompt();
@@ -15,12 +16,24 @@ int validation_check(const char *term);
 crontab head;
 
 int main(int argc, char *argv[]) {
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+
 	read_crontab_file(&head);
 
 	while (1) {
 		if (print_prompt() < 0)
 			break;
 	}
+
+	gettimeofday(&end, NULL);
+
+	if (end.tv_usec < start.tv_usec) {
+		end.tv_usec += 1000000;
+		end.tv_sec--;
+	}
+
+	printf("Runtime : %ld.%ld sec\n", end.tv_sec - start.tv_sec, end.tv_usec - start.tv_usec);
 	exit(0);
 }
 

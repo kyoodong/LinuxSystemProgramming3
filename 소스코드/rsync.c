@@ -12,6 +12,7 @@
 #include "core.h"
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/time.h>
 
 #define USAGE "usage: ssu_rsync [option] <src> <dest>\n\t-r : recursive sync\n\t-t : sync using tar\n\t-m : Fully sync\n"
 
@@ -23,6 +24,7 @@ typedef struct node {
 
 node glob_sync_list;
 node glob_delete_list;
+struct timeval start_tv, end_tv;
 
 
 int is_same_file(const char *src, const char *dest);
@@ -52,6 +54,8 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, USAGE);
 		exit(1);
 	}
+
+	gettimeofday(&start_tv, NULL);
 
 	// 종료 액션 등록
 	atexit(onexit);
@@ -284,7 +288,10 @@ int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) 
 	}
 
 	// 같은 파일이 이미 존재
-	if (is_same_file(src, dest))
+	if (is_same_file(src, dest)) {
+		return 0;
+	}
+
 	fname = strrchr(src, '/');
 	*fname = 0;
 	strcpy(path, src);
@@ -315,6 +322,11 @@ int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) 
 		sprintf(buf, "tar -xf %s -C %s", backup_filepath, dest);
 		system(buf);
 
+		if (stat(backup_filepath, &statbuf) < 0) {
+			fprintf(stderr, "stat error for %s\n", backup_filepath);
+			exit(1);
+		}
+
 		// tar 파일 삭제
 		unlink(backup_filepath);
 
@@ -326,6 +338,10 @@ int sync_file(int argc, char *argv[], char *src, const char *dest, int toption) 
 		log_rsync(argc, argv, buf);
 	}
 	else {
+		if (stat(src, &statbuf) < 0) {
+			fprintf(stderr, "stat error for %s\n", src);
+			exit(1);
+		}
 		sprintf(backup_filepath, "%sXXXXXX", src);
 
 		// 임시 파일, SIGINT 발생 시 되돌리기 백업용
@@ -389,6 +405,15 @@ void onexit() {
 		else
 			unlink(backup_filepath);
 	}
+
+	gettimeofday(&end_tv, NULL);
+
+	if (end_tv.tv_usec < start_tv.tv_usec) {
+		end_tv.tv_usec += 1000000;
+		end_tv.tv_sec--;
+	}
+
+	printf("Runtime : %ld.%ld sec\n", end_tv.tv_sec - start_tv.tv_sec, end_tv.tv_usec - start_tv.tv_usec);
 }
 
 /**
@@ -661,10 +686,6 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		}
 	}
 
-	// 같은 파일이 이미 존재
-	if (is_same_file(src, dest))
-		return;
-
 	// src 디렉토리 읽기
 	if ((count = scandir(src, &dirp, NULL, NULL)) < 0) {
 		fprintf(stderr, "scandir error for %s\n", src);
@@ -718,7 +739,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 		}
 
 		// src가 빈 디렉토리인 경우
-		if (count == 2) {
+		if (count == 2 && !is_same_file(src, dest)) {
 			n = malloc(sizeof(node));
 			strcpy(n->fname, get_path(src, depth - 1));
 			n->stat.st_size = 0;
@@ -1054,7 +1075,6 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 			// 삭제 파일 리스트
 			tmp = glob_delete_list.next;
 
-			// 동기화 해야하는 파일들 다 tar로 묶음
 			while (tmp != NULL) {
 				cp += sprintf(cp, "\t%s delete\n", strchr(tmp->fname, '/') + 1);
 
@@ -1062,6 +1082,7 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 				tmp = tmp->next;
 				remove_node(prev);
 			}
+
 
 			buf[strlen(buf) - 1] = 0;
 			log_rsync(argc, argv, buf);
@@ -1096,7 +1117,7 @@ void log_rsync(int argc, char *argv[], const char *str) {
 
 	t = time(NULL);
 
-	if ((fp = fopen("ssu_rsync_log", "a")) == NULL) {
+	if ((fp = fopen("ssu_rsync_log", "a+")) == NULL) {
 		fprintf(stderr, "open error for ssu_rsync_log\n");
 		exit(1);
 	}

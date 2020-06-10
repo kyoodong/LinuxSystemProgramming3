@@ -1,9 +1,11 @@
 compile: clear core crontab crond rsync
 debug: clear
 	rm -f a.out
-	gcc crontab.c core.c -g
-#gcc rsync.c core.c -g
+#gcc crontab.c core.c -g
+	gcc -DDEBUG daemon.c core.c -lpthread -o ssu_crond
+	gcc rsync.c core.c -g
 	gdb ./a.out
+	
 
 crontab:
 	gcc crontab.c -o ssu_crontab core.o
@@ -27,7 +29,7 @@ test_rsync:
 	tree testdir
 
 clear:
-	rm -f ssu_crontab ssu_crond ssu_rsync core.o ssu_rsync_log
+	rm -f ssu_crontab ssu_crond ssu_rsync core.o
 	rm -rf testdir/*
 
 core:
