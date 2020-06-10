@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 
 void init_daemon();
 void print_log(const char *str);
@@ -45,7 +46,7 @@ void daemon_main() {
 		pthread_detach(thread);
 	
 #ifdef DEBUG
-		sleep(1);
+		sleep(5);
 #else
 		sleep(60);
 #endif
@@ -107,7 +108,26 @@ void *process_crontab() {
 			
 			// 실행!
 			sprintf(buf, "%s &", ct->op);
-			system(ct->op);
+
+			int sys = system(ct->op);
+			if (sys < 0) {
+				ct = ct->next;
+				continue;
+			}
+
+			if (WIFEXITED(sys)) {
+				if ((sys >> 8) == 127) {
+					ct = ct->next;
+					continue;
+				}
+			} else if (WIFSIGNALED(sys)) {
+				ct = ct->next;
+				continue;
+			}
+			else if (WIFSTOPPED(sys)) {
+				ct = ct->next;
+				continue;
+			}
 
 			sprintf(buf, "run %s %s %s %s %s %s\n", ct->min, ct->hour, ct->day, ct->dayofweek, ct->month, ct->op);
 			log_crontab(buf);
