@@ -973,7 +973,8 @@ void sync_dir(int argc, char *argv[], const char *src, const char *dest, int rop
 
 				// 지워야할 항목 조차 없다면
 				if (tmp == NULL) {
-					exit(0);
+					log_rsync(argc, argv, "");
+					return;
 				}
 
 				sprintf(buf, "totalSize : 0bytes\n");
