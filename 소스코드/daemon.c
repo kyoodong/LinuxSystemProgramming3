@@ -44,12 +44,19 @@ void daemon_main() {
 		// 스레드 종료시 자원을 반환하도록 설정
 		pthread_detach(thread);
 	
+#ifdef DEBUG
+		sleep(1);
+#else
 		sleep(60);
+#endif
 	}
 }
 
 int main(int argc, char *argv[]) {
+	openlog("ssu_crond_log", LOG_CONS | LOG_PID | LOG_NDELAY, 0);
+#ifndef DEBUG
 	init_daemon();
+#endif
 	daemon_main();
 	exit(0);
 }
@@ -89,6 +96,9 @@ void *process_crontab() {
 	
 	ct = head.next;
 	while (ct != NULL) {
+#ifdef DEBUG
+		printf("%s\n", ct->op);
+#endif
 		if (parse_execute_term(ct->min, tm->tm_min) &&
 			parse_execute_term(ct->hour, tm->tm_hour) &&
 			parse_execute_term(ct->day, tm->tm_mday) &&
@@ -128,8 +138,11 @@ void test(crontab *ct, int min, int hour, int day, int month, int dayofweek) {
  @param str 로그에 출력할 문자열
  */
 void print_log(const char *str) {
-	//fputs(str, stderr);
-	syslog(LOG_INFO, "%s", str);
+#ifdef DEBUG
+	fputs(str, stderr);
+#else
+	syslog(LOG_ERR, "%s", str);
+#endif
 }
 
 /**
@@ -156,4 +169,5 @@ void init_daemon() {
 	fd = open("/dev/null", O_RDWR);
 	dup(0);
 	dup(0);
+
 }

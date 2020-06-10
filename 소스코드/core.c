@@ -171,6 +171,14 @@ static token __get_token() {
 		while (isdigit(*tmp))
 			t.value = t.value * 10 + *tmp++ - '0';
 		t.type = NUM;
+
+		if (t.value < 0 || t.value >= 60) {
+			result = -1;
+			t.type = OP;
+			t.value = 0;
+			return t;
+		}
+
 		return t;
 	}
 
