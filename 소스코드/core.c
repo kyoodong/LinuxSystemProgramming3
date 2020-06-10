@@ -150,6 +150,9 @@ int log_crontab(const char *str) {
 	return 0;
 }
 
+/**
+  주기 문자열에서 토큰 분리해주는 함수
+  */
 static token __get_token() {
 	token t;
 	char *tmp;
@@ -180,6 +183,9 @@ static token __get_token() {
 	return t;
 }
 
+/**
+  다음 토큰으로 넘어가는 함수
+  */
 static void __next_token() {
 	while (*extermp == ' ')
 		extermp++;
@@ -192,6 +198,9 @@ static void __next_token() {
 	extermp++;
 }
 
+/**
+  , 파싱 함수
+  */
 static token __comma(int n) {
 	token t, t2;
 	if (result)
@@ -215,6 +224,9 @@ static token __comma(int n) {
 	return t;
 }
 
+/**
+  - 파싱 함수
+  */
 static token __minus(int n, int table[60]) {
 	token t, t2, t3;
 
@@ -269,6 +281,9 @@ static token __minus(int n, int table[60]) {
 	return t;
 }
 
+/**
+  / 파싱 함수
+  */
 static token __slash(int n, int table[60]) {
 	token t, t2, t3;
 
@@ -333,6 +348,9 @@ static token __slash(int n, int table[60]) {
 	return t;
 }
 
+/**
+  파싱 스타트 함수
+  */
 static int __expr(int n) {
 	token t;
 	int table[60];
@@ -365,7 +383,13 @@ static int __expr(int n) {
 	return 0;
 }
 
-// 1-15/2,16-30/3
+/**
+  외부에서 파싱 요청을 하는 함수
+  @param str 주기 문자열
+  @param n n이 해당 주기문자열에서 실행가능한지 확인
+  @return n 이 해당 주기 문자열에서 실행가능하면 1 아니면 0 에러 시 -1 리턴
+  예를 들어 1-10/2 은 2, 4, 6, 8, 10 은 실행 가능하므로 n이 2면 1 리턴
+  */
 int parse_execute_term(const char *str, int n) {
 	memset(exterm, 0, sizeof(exterm));
 	strcpy(exterm, str);

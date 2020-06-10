@@ -27,7 +27,7 @@ int daemon_main() {
 	// 파일 생성되기를 대기
 	while (read_crontab_file(&head) < 0 || stat(CRONTAB_FILE, &cronstat) < 0) {
 		print_log("Cannot open crontab file\n");
-		sleep(5);
+		sleep(30);
 	}
 
 	while (1) {
@@ -46,7 +46,7 @@ int daemon_main() {
 }
 
 int main(int argc, char *argv[]) {
-	//init_daemon();
+	init_daemon();
 	daemon_main();
 	exit(0);
 }
