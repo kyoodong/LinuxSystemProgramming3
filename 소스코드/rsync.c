@@ -12,6 +12,7 @@
 #include "core.h"
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/time.h>
 
 #define USAGE "usage: ssu_rsync [option] <src> <dest>\n\t-r : recursive sync\n\t-t : sync using tar\n\t-m : Fully sync\n"
 
@@ -23,6 +24,7 @@ typedef struct node {
 
 node glob_sync_list;
 node glob_delete_list;
+struct timeval start_tv, end_tv;
 
 
 int is_same_file(const char *src, const char *dest);
@@ -52,6 +54,8 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, USAGE);
 		exit(1);
 	}
+
+	gettimeofday(&start_tv, NULL);
 
 	// 종료 액션 등록
 	atexit(onexit);
@@ -401,6 +405,15 @@ void onexit() {
 		else
 			unlink(backup_filepath);
 	}
+
+	gettimeofday(&end_tv, NULL);
+
+	if (end_tv.tv_usec < start_tv.tv_usec) {
+		end_tv.tv_usec += 1000000;
+		end_tv.tv_sec--;
+	}
+
+	printf("Runtime : %ld.%ld sec\n", end_tv.tv_sec - start_tv.tv_sec, end_tv.tv_usec - start_tv.tv_usec);
 }
 
 /**
